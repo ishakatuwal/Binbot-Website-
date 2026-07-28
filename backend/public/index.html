@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartBin ESP32 IoT - Mobile Monitoring & 82% Alert System</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Main Container -->
+  <div class="app-container">
+
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-icon">🗑️</span>
+        <div>
+          <h1 class="brand-title">SmartBin IoT</h1>
+          <span style="font-size: 10px; color: var(--text-muted);">ESP32 Real-Time Monitoring</span>
+        </div>
+      </div>
+
+      <div class="user-badge-container">
+        <div id="user-role-badge" class="role-tag admin">Admin</div>
+        <button id="btn-logout" class="btn-icon-logout" title="Logout">
+          <span>🚪</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Sticky 82% Threshold Alert Banner -->
+    <div id="alert-banner" class="alert-banner-container">
+      <div class="alert-banner-icon">🔔</div>
+      <div class="alert-banner-text">
+        <div class="alert-banner-title">🚨 URGENT BIN ALERT! (≥ 80% Full Threshold)</div>
+        <div id="alert-banner-detail" class="alert-banner-sub">Smart Bin reached 80%+ filled capacity. Dispatch needed.</div>
+      </div>
+      <button id="btn-banner-action" class="btn btn-sm btn-secondary" onclick="app.switchTab('dashboard')">View</button>
+    </div>
+
+    <!-- VIEW 1: BIN DASHBOARD (Admin & Superadmin) -->
+    <main id="view-dashboard" class="view-panel active">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span>📊</span> Live Smart Bins
+        </h2>
+        <button class="btn btn-sm btn-outline" onclick="app.fetchBins()">
+          🔄 Refresh
+        </button>
+      </div>
+
+      <!-- Bins List Container -->
+      <div id="bins-container">
+        <!-- Rendered dynamically by JS -->
+      </div>
+    </main>
+
+    <!-- VIEW 2: SUPERADMIN CONTROL PANEL -->
+    <main id="view-superadmin" class="view-panel">
+      <div class="section-header">
+        <h2 class="section-title" style="color: var(--superadmin-gold);">
+          <span>👑</span> Superadmin Governance
+        </h2>
+      </div>
+
+      <!-- Superadmin Register New Bin System -->
+      <div class="card" style="border-color: rgba(56, 189, 248, 0.4); margin-bottom: 16px;">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px; color: var(--primary);">
+          ➕ Register New Smart Bin into MongoDB
+        </h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          Add physical smart bin nodes into database to track location and compartment fill levels.
+        </p>
+
+        <form onsubmit="app.handleRegisterBin(event)">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label class="form-label">Bin ID</label>
+              <input type="text" id="new-bin-id" class="form-input" placeholder="e.g. BIN-105" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location / Sector</label>
+              <input type="text" id="new-bin-location" class="form-input" placeholder="e.g. North Gate Entrance" required>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 4px;">
+            <div class="form-group">
+              <label class="form-label">Initial Dry (%)</label>
+              <input type="number" id="new-bin-dry" class="form-input" min="0" max="100" value="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Initial Wet (%)</label>
+              <input type="number" id="new-bin-wet" class="form-input" min="0" max="100" value="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Initial Metal (%)</label>
+              <input type="number" id="new-bin-metal" class="form-input" min="0" max="100" value="0">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
+            ➕ Save Bin to MongoDB Database
+          </button>
+        </form>
+      </div>
+
+      <!-- Admin Login Approvals Section -->
+      <div class="card" style="border-color: rgba(245, 158, 11, 0.4);">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px; color: var(--superadmin-gold);">
+          ⏳ Pending Admin Approvals
+        </h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          Admins must be approved by Superadmin before gaining dashboard login access.
+        </p>
+        <div id="pending-admins-list">
+          <!-- Pending Admins rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Password Recovery Requests Section -->
+      <div class="card">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px; color: #60a5fa;">
+          🔑 Admin Password Reset Tickets
+        </h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          Password recovery requests submitted by Admins directly route to this Superadmin panel.
+        </p>
+        <div id="password-requests-list">
+          <!-- Reset requests rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Active Approved Admins Directory -->
+      <div class="card">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">
+          👥 Active Admin Directory
+        </h3>
+        <div id="approved-admins-list">
+          <!-- Approved Admins rendered by JS -->
+        </div>
+      </div>
+    </main>
+
+    <!-- VIEW 3: ALERTS LOG -->
+    <main id="view-alerts" class="view-panel">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span>🚨</span> 82% Alert Logs & History
+        </h2>
+        <button class="btn btn-sm btn-outline" onclick="app.fetchAlerts()">
+          🔄 Refresh Log
+        </button>
+      </div>
+
+      <div id="alerts-container">
+        <!-- Rendered dynamically by JS -->
+      </div>
+    </main>
+
+    <!-- VIEW 4: ESP32 SIMULATOR & HARDWARE GUIDE -->
+    <main id="view-simulator" class="view-panel">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span>⚡</span> ESP32 Hardware Simulator & API
+        </h2>
+      </div>
+
+      <!-- Interactive Hardware Simulator Card -->
+      <div class="card">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">
+          🎛️ Live ESP32 Sensor Telemetry Simulator
+        </h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+          Simulate real ultrasonic distance sensor data sent from ESP32 to test the 82% alert threshold engine instantly.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">Select Target Smart Bin</label>
+          <select id="sim-bin-select" class="form-input">
+            <option value="BIN-01">BIN-01 - Central Park North</option>
+            <option value="BIN-02">BIN-02 - Market Street Hub</option>
+            <option value="BIN-03">BIN-03 - University Library</option>
+            <option value="BIN-04">BIN-04 - Metro Station West</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="form-label">Simulated Bin Fill Level (%)</label>
+            <span id="sim-level-val" style="font-weight: 700; color: var(--primary); font-size: 16px;">84%</span>
+          </div>
+          <input type="range" id="sim-fill-slider" min="0" max="100" value="84" oninput="document.getElementById('sim-level-val').innerText = this.value + '%'">
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 4px;">
+            <span>0% (Empty)</span>
+            <span style="color: var(--danger); font-weight: 700;">82% Threshold Alert</span>
+            <span>100% (Full)</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="width: 100%;" onclick="app.sendSimulatedTelemetry()">
+          📡 Send ESP32 Telemetry (POST /api/telemetry)
+        </button>
+      </div>
+
+      <!-- ESP32 Arduino C++ Code Guide -->
+      <div class="card">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">
+          💻 ESP32 C++ Arduino Integration Code
+        </h3>
+        <p style="font-size: 12px; color: var(--text-muted);">
+          Upload this sketch to your ESP32 board connected to an HC-SR04 ultrasonic sensor to post telemetry directly to this server:
+        </p>
+
+        <div class="code-block">
+#include &lt;WiFi.h&gt;
+#include &lt;HTTPClient.h&gt;
+#include &lt;ArduinoJson.h&gt;
+
+const char* ssid = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
+const char* serverUrl = "http://YOUR_SERVER_IP:3000/api/telemetry";
+
+#define TRIG_PIN 5
+#define ECHO_PIN 18
+#define BIN_HEIGHT_CM 100.0
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+}
+
+void loop() {
+  digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  float distanceCm = duration * 0.034 / 2;
+  
+  // Calculate Fill Percentage
+  int fillLevel = constrain(100 - (distanceCm / BIN_HEIGHT_CM * 100), 0, 100);
+
+  // Send telemetry HTTP POST
+  HTTPClient http;
+  http.begin(serverUrl);
+  http.addHeader("Content-Type", "application/json");
+  
+  String json;
+  StaticJsonDocument<200> doc;
+  doc["bin_id"] = "BIN-01";
+  doc["fill_level"] = fillLevel;
+  doc["battery"] = 92;
+  serializeJson(doc, json);
+
+  int httpCode = http.POST(json);
+  http.end();
+
+  delay(10000); // Poll every 10 seconds
+}
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Bottom Mobile Navigation Bar -->
+  <nav class="bottom-nav">
+    <div id="nav-dashboard" class="nav-item active" onclick="app.switchTab('dashboard')">
+      <span class="nav-icon">📊</span>
+      <span>Bins</span>
+    </div>
+    <div id="nav-superadmin" class="nav-item superadmin-tab" style="display: none;" onclick="app.switchTab('superadmin')">
+      <span class="nav-icon">👑</span>
+      <span>Superadmin</span>
+    </div>
+    <div id="nav-alerts" class="nav-item" onclick="app.switchTab('alerts')">
+      <span class="nav-icon">🚨</span>
+      <span>Alerts</span>
+    </div>
+    <div id="nav-simulator" class="nav-item" onclick="app.switchTab('simulator')">
+      <span class="nav-icon">⚡</span>
+      <span>ESP32 Sim</span>
+    </div>
+  </nav>
+
+  <!-- MODAL 1: AUTHENTICATION & LOGIN / REGISTRATION -->
+  <div id="auth-modal" class="modal-overlay open">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="auth-modal-title" class="modal-title">🔐 System Login</h2>
+      </div>
+
+      <!-- Login Form -->
+      <form id="form-login" onsubmit="app.handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input type="text" id="login-username" class="form-input" placeholder="e.g. admin_john or superadmin" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="login-password" class="form-input" placeholder="Enter password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
+          Log In
+        </button>
+
+        <div style="margin-top: 14px; text-align: center; font-size: 12px; display: flex; justify-content: space-between;">
+          <a href="#" style="color: var(--primary);" onclick="app.showAuthTab('register')">Register New Admin</a>
+          <a href="#" style="color: var(--text-muted);" onclick="app.showAuthTab('forgot')">Forgot Password?</a>
+        </div>
+
+        <!-- Quick Demo Credentials Box -->
+        <div style="margin-top: 18px; padding: 10px; background: #0f172a; border-radius: 8px; border: 1px dashed var(--border-color); font-size: 11px; color: var(--text-muted);">
+          <div style="font-weight: 700; color: var(--text-main); margin-bottom: 4px;">💡 Demo Quick Logins:</div>
+          <div>👑 <b>Superadmin:</b> <code style="color: var(--superadmin-gold);">superadmin</code> / <code>admin123password</code></div>
+          <div>🛡️ <b>Admin:</b> <code style="color: var(--primary);">admin_john</code> / <code>password123</code></div>
+        </div>
+      </form>
+
+      <!-- Register Form -->
+      <form id="form-register" style="display: none;" onsubmit="app.handleRegister(event)">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="reg-name" class="form-input" placeholder="e.g. Sarah Smith" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="reg-email" class="form-input" placeholder="e.g. sarah@smartbin.io" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Desired Username</label>
+          <input type="text" id="reg-username" class="form-input" placeholder="e.g. admin_sarah" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="reg-password" class="form-input" placeholder="Set password" required>
+        </div>
+
+        <button type="submit" class="btn btn-success" style="width: 100%; margin-top: 8px;">
+          Submit Admin Registration
+        </button>
+        <p style="font-size: 11px; color: var(--warning); margin-top: 8px; text-align: center;">
+          ⚠️ Your account will require Superadmin approval before login access is granted.
+        </p>
+
+        <div style="margin-top: 14px; text-align: center; font-size: 12px;">
+          <a href="#" style="color: var(--text-muted);" onclick="app.showAuthTab('login')">← Back to Login</a>
+        </div>
+      </form>
+
+      <!-- Forgot Password Form -->
+      <form id="form-forgot" style="display: none;" onsubmit="app.handleForgotPassword(event)">
+        <div class="form-group">
+          <label class="form-label">Your Admin Username</label>
+          <input type="text" id="forgot-username" class="form-input" placeholder="e.g. admin_john" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reason / Notes for Superadmin</label>
+          <textarea id="forgot-reason" class="form-input" rows="3" placeholder="Briefly state reason for password reset request..."></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
+          Send Reset Request to Superadmin
+        </button>
+
+        <div style="margin-top: 14px; text-align: center; font-size: 12px;">
+          <a href="#" style="color: var(--text-muted);" onclick="app.showAuthTab('login')">← Back to Login</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: SUPERADMIN PASSWORD RESET ACTION MODAL -->
+  <div id="reset-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">🔑 Superadmin Password Reset</h2>
+        <button class="btn-icon-logout" onclick="document.getElementById('reset-modal').classList.remove('open')">✕</button>
+      </div>
+      <form onsubmit="app.executeSuperadminReset(event)">
+        <input type="hidden" id="reset-ticket-id">
+        <div class="form-group">
+          <label class="form-label">Target Admin Username</label>
+          <input type="text" id="reset-target-user" class="form-input" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Set New Password for Admin</label>
+          <input type="text" id="reset-new-password" class="form-input" placeholder="e.g. newSecurePass123" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+          Authorize & Update Password
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Application Frontend Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
