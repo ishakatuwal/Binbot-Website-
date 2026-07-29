@@ -212,3 +212,28 @@ exports.emptyBin = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// 7. Delete Bin Permanently (Superadmin Action)
+exports.deleteBin = async (req, res) => {
+  try {
+    const { binId } = req.params;
+    const formattedBinId = binId.trim().toUpperCase();
+
+    const bin = await Bin.findOneAndDelete({ binId: formattedBinId });
+    if (!bin) {
+      return res.status(404).json({ error: 'Bin not found' });
+    }
+
+    await Alert.deleteMany({ binId: formattedBinId });
+    await AuditLog.create({
+      action: 'DELETE_BIN',
+      performedBy: 'superadmin',
+      targetItem: formattedBinId,
+      details: `Deleted bin ${formattedBinId} from system`
+    });
+
+    res.json({ message: `Bin '${formattedBinId}' deleted permanently from database.` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

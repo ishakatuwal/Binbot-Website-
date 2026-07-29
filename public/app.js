@@ -309,7 +309,13 @@ const app = {
 
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted);">
             <span>🕒 Updated: ${new Date(bin.lastUpdated || bin.updatedAt || Date.now()).toLocaleTimeString()}</span>
-            <button class="btn btn-sm btn-outline" onclick="app.emptyBin('${bin.binId}')">🧹 Mark Emptied</button>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-sm btn-outline" onclick="app.emptyBin('${bin.binId}')">🧹 Empty</button>
+              ${this.currentUser && this.currentUser.role && this.currentUser.role.toLowerCase() === 'superadmin'
+                ? `<button class="btn btn-sm btn-danger" onclick="app.deleteBin('${bin.binId}')">🗑️ Delete</button>`
+                : ''
+              }
+            </div>
           </div>
         </div>
       `;
@@ -616,6 +622,25 @@ const app = {
       }
     } catch (err) {
       alert('Error resetting bin level');
+    }
+  },
+
+  async deleteBin(binId) {
+    const confirmAction = confirm(`⚠️ Are you sure you want to DELETE bin '${binId}' from the database?`);
+    if (!confirmAction) return;
+
+    try {
+      const res = await fetch(`/api/bins/${binId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        this.fetchBins();
+        this.fetchAlerts();
+      } else {
+        alert(data.error || 'Failed to delete bin');
+      }
+    } catch (err) {
+      alert('Error deleting bin');
     }
   },
 

@@ -6,7 +6,8 @@ const {
   updateBinFromESP32,
   getAlerts,
   acknowledgeAlert,
-  emptyBin
+  emptyBin,
+  deleteBin
 } = require('../controllers/binController');
 
 router.post('/register', registerBin);
@@ -18,5 +19,6 @@ router.post('/telemetry', updateBinFromESP32); // ESP32 simulator route alias
 router.get('/alerts', getAlerts);
 router.post('/alerts/:alertId/acknowledge', acknowledgeAlert);
 router.post('/:binId/empty', emptyBin);
+router.delete('/:binId', deleteBin);
 
 module.exports = router;
