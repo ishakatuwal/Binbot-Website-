@@ -31,6 +31,34 @@ const app = {
     }, 4000);
   },
 
+  // Custom Corporate Confirmation Modal (Replaces browser native confirm domain header)
+  showConfirmModal(message, onConfirm) {
+    const msgEl = document.getElementById('confirm-modal-message');
+    if (!msgEl) {
+      onConfirm();
+      return;
+    }
+
+    msgEl.innerText = message;
+    const yesBtn = document.getElementById('btn-confirm-yes');
+    
+    // Replace element listener cleanly
+    const newBtn = yesBtn.cloneNode(true);
+    yesBtn.parentNode.replaceChild(newBtn, yesBtn);
+    
+    newBtn.addEventListener('click', () => {
+      this.closeConfirmModal();
+      onConfirm();
+    });
+
+    document.getElementById('confirm-modal').classList.add('open');
+  },
+
+  closeConfirmModal() {
+    const modal = document.getElementById('confirm-modal');
+    if (modal) modal.classList.remove('open');
+  },
+
   init() {
     this.initSocket();
 
@@ -635,22 +663,21 @@ const app = {
     `).join('');
   },
 
-  async deleteStaff(staffId, name) {
-    const confirmAction = confirm(`Are you sure you want to remove staff member '${name}'?`);
-    if (!confirmAction) return;
-
-    try {
-      const res = await fetch(`/api/staff/${staffId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) {
-        this.showToast(data.message || 'Staff member removed', 'success');
-        this.fetchStaff();
-      } else {
-        this.showToast(data.error || 'Failed to remove staff member', 'error');
+  deleteStaff(staffId, name) {
+    this.showConfirmModal(`Are you sure you want to remove staff member '${name}'?`, async () => {
+      try {
+        const res = await fetch(`/api/staff/${staffId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+          this.showToast(data.message || 'Staff member removed', 'success');
+          this.fetchStaff();
+        } else {
+          this.showToast(data.error || 'Failed to remove staff member', 'error');
+        }
+      } catch (err) {
+        this.showToast('Error removing staff member', 'error');
       }
-    } catch (err) {
-      this.showToast('Error removing staff member', 'error');
-    }
+    });
   },
 
   // SUPERADMIN: Create New Admin (Story 2)
@@ -786,36 +813,34 @@ const app = {
     }
   },
 
-  async toggleSuspendAdmin(userId, username, currentlySuspended) {
-    const confirmAction = confirm(`Are you sure you want to ${currentlySuspended ? 'reactivate' : 'suspend'} admin '@${username}'?`);
-    if (!confirmAction) return;
-
-    try {
-      const res = await fetch(`/api/auth/admins/${userId}/suspend`, { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        this.showToast(data.message, 'success');
-        this.fetchSuperadminData();
+  toggleSuspendAdmin(userId, username, currentlySuspended) {
+    this.showConfirmModal(`Are you sure you want to ${currentlySuspended ? 'reactivate' : 'suspend'} admin '@${username}'?`, async () => {
+      try {
+        const res = await fetch(`/api/auth/admins/${userId}/suspend`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          this.showToast(data.message, 'success');
+          this.fetchSuperadminData();
+        }
+      } catch (err) {
+        this.showToast('Error updating admin status', 'error');
       }
-    } catch (err) {
-      this.showToast('Error updating admin status', 'error');
-    }
+    });
   },
 
-  async deleteAdmin(userId, username) {
-    const confirmAction = confirm(`PERMANENT ACTION: Are you sure you want to DELETE admin '@${username}'? This cannot be undone.`);
-    if (!confirmAction) return;
-
-    try {
-      const res = await fetch(`/api/auth/admins/${userId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) {
-        this.showToast(data.message, 'success');
-        this.fetchSuperadminData();
+  deleteAdmin(userId, username) {
+    this.showConfirmModal(`PERMANENT ACTION: Are you sure you want to DELETE admin '@${username}'? This cannot be undone.`, async () => {
+      try {
+        const res = await fetch(`/api/auth/admins/${userId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+          this.showToast(data.message, 'success');
+          this.fetchSuperadminData();
+        }
+      } catch (err) {
+        this.showToast('Error deleting admin', 'error');
       }
-    } catch (err) {
-      this.showToast('Error deleting admin', 'error');
-    }
+    });
   },
 
   async handleRegisterBin(e) {
@@ -928,23 +953,22 @@ const app = {
     }
   },
 
-  async deleteBin(binId) {
-    const confirmAction = confirm(`Are you sure you want to DELETE bin '${binId}' from the database?`);
-    if (!confirmAction) return;
-
-    try {
-      const res = await fetch(`/api/bins/${binId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) {
-        this.showToast(data.message, 'success');
-        this.fetchBins();
-        this.fetchAlerts();
-      } else {
-        this.showToast(data.error || 'Failed to delete bin', 'error');
+  deleteBin(binId) {
+    this.showConfirmModal(`Are you sure you want to DELETE bin '${binId}' from the database?`, async () => {
+      try {
+        const res = await fetch(`/api/bins/${binId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+          this.showToast(data.message, 'success');
+          this.fetchBins();
+          this.fetchAlerts();
+        } else {
+          this.showToast(data.error || 'Failed to delete bin', 'error');
+        }
+      } catch (err) {
+        this.showToast('Error deleting bin', 'error');
       }
-    } catch (err) {
-      this.showToast('Error deleting bin', 'error');
-    }
+    });
   },
 
   async sendSimulatedTelemetry() {
