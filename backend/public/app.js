@@ -573,13 +573,24 @@ const app = {
     e.preventDefault();
     const firstName = document.getElementById('staff-first-name').value.trim();
     const lastName = document.getElementById('staff-last-name').value.trim();
-    const phone = document.getElementById('staff-phone').value.trim();
+    const rawPhone = document.getElementById('staff-phone').value.trim();
+
+    if (!firstName || !lastName) {
+      this.showToast('Please enter both First Name and Last Name.', 'error');
+      return;
+    }
+
+    const digitsOnly = rawPhone.replace(/\D/g, '');
+    if (digitsOnly.length !== 10) {
+      this.showToast('Invalid Phone: Phone number must be exactly 10 digits (e.g. 0414972400).', 'error');
+      return;
+    }
 
     try {
       const res = await fetch('/api/staff/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firstName, lastName, phone })
+        body: JSON.stringify({ firstName, lastName, phone: digitsOnly })
       });
 
       const data = await res.json();
@@ -603,7 +614,7 @@ const app = {
     if (!tbody) return;
 
     if (!this.staff || this.staff.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No staff members registered in database.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No staff members registered in database.</td></tr>`;
       return;
     }
 
@@ -617,8 +628,29 @@ const app = {
             ${s.status}
           </span>
         </td>
+        <td>
+          <button class="btn btn-sm btn-danger" onclick="app.deleteStaff('${s._id}', '${s.fullName || s.firstName}')">Remove</button>
+        </td>
       </tr>
     `).join('');
+  },
+
+  async deleteStaff(staffId, name) {
+    const confirmAction = confirm(`Are you sure you want to remove staff member '${name}'?`);
+    if (!confirmAction) return;
+
+    try {
+      const res = await fetch(`/api/staff/${staffId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        this.showToast(data.message || 'Staff member removed', 'success');
+        this.fetchStaff();
+      } else {
+        this.showToast(data.error || 'Failed to remove staff member', 'error');
+      }
+    } catch (err) {
+      this.showToast('Error removing staff member', 'error');
+    }
   },
 
   // SUPERADMIN: Create New Admin (Story 2)
