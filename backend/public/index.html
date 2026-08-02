@@ -3,20 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Waste Management System - Corporate Operator Portal</title>
+  <title>Binbot Waste Management System - Corporate Portal</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Leaflet Interactive Map Engine -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
+  <!-- CUSTOM CORPORATE TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="toast-container"></div>
+
   <div class="app-layout">
 
-    <!-- PERSISTENT COLLAPSIBLE SIDEBAR (Stories 9, 10, 17) -->
+    <!-- PERSISTENT COLLAPSIBLE SIDEBAR -->
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-header">
         <a href="#" class="sidebar-brand" onclick="app.switchTab('home')">
-          <span class="sidebar-brand-text">SMARTBIN</span>
+          <span class="sidebar-brand-text">BINBOT</span>
           <span class="brand-tag">CORPORATE</span>
         </a>
         <button class="btn-toggle-sidebar" onclick="app.toggleSidebar()" title="Toggle Sidebar">
@@ -47,7 +53,7 @@
           <span class="nav-text">Staff Management</span>
         </div>
 
-        <!-- Superadmin Restricted Nav Group (Stories 10, 15, 17) -->
+        <!-- Superadmin Restricted Nav Group -->
         <div id="superadmin-nav-group" style="display: none;">
           <div class="nav-section-title" style="color: var(--superadmin-gold);">Superadmin</div>
 
@@ -70,10 +76,9 @@
     <!-- MAIN CONTENT WRAPPER -->
     <div class="main-wrapper">
 
-      <!-- TOP HEADER (Story 12) -->
+      <!-- TOP HEADER -->
       <header class="top-header">
         <div class="header-left">
-          <!-- Back to Home Button (Story 12) - hidden on Home view -->
           <button id="btn-back-home" class="btn-back-home" style="display: none;" onclick="app.switchTab('home')">
             Back to Home
           </button>
@@ -119,16 +124,15 @@
             </div>
           </div>
 
-          <!-- Quick Actions & Reporting -->
+          <!-- Quick Operations -->
           <div class="card">
-            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Quick Operations & Documentation</h3>
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Quick Operations</h3>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
               <button class="btn btn-outline" onclick="app.switchTab('bins')">View Live Bins</button>
               <button class="btn btn-outline" onclick="app.switchTab('map')">View Map Pins</button>
-              <button class="btn btn-outline" onclick="app.switchTab('alerts')">View Overflow Alerts</button>
+              <button id="btn-quick-alerts-nav" class="btn btn-outline" onclick="app.switchTab('alerts')">View Overflow Alerts</button>
               <button class="btn btn-outline" onclick="app.switchTab('staff')">Manage Staff</button>
               <button class="btn btn-primary" onclick="app.downloadPdfReport()">Download PDF Report</button>
-              <button class="btn btn-warning" onclick="window.open('/download-viva-guide', '_blank')">Download Viva Guide</button>
             </div>
           </div>
         </section>
@@ -145,7 +149,7 @@
           </div>
         </section>
 
-        <!-- VIEW 3: GOOGLE MAP VIEW (Story 23) -->
+        <!-- VIEW 3: GOOGLE MAP VIEW -->
         <section id="view-map" class="view-panel">
           <div class="page-title-row">
             <h1 class="page-title">Google Maps Geolocation Pins</h1>
@@ -160,7 +164,7 @@
           </div>
         </section>
 
-        <!-- VIEW 4: ALERTS & TASK ASSIGNMENT LOG (Stories 1, 5, 6, 7, 19, 20, 21) -->
+        <!-- VIEW 4: ALERTS & TASK ASSIGNMENT LOG -->
         <section id="view-alerts" class="view-panel">
           <div class="page-title-row">
             <h1 class="page-title">Hardware Overflow Alerts & Task Assignments</h1>
@@ -189,13 +193,12 @@
           </div>
         </section>
 
-        <!-- VIEW 5: STAFF MANAGEMENT (Story 18) -->
+        <!-- VIEW 5: STAFF MANAGEMENT -->
         <section id="view-staff" class="view-panel">
           <div class="page-title-row">
             <h1 class="page-title">Waste Collection Staff Management</h1>
           </div>
 
-          <!-- Register Staff Form (Story 18) -->
           <div class="card">
             <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">Register Collection Staff Member</h3>
             <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
@@ -224,7 +227,6 @@
             </form>
           </div>
 
-          <!-- Staff Directory Table -->
           <div class="card">
             <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Registered Collection Staff Directory</h3>
             <div class="table-responsive">
@@ -245,13 +247,12 @@
           </div>
         </section>
 
-        <!-- VIEW 6: SUPERADMIN ADMIN MANAGEMENT & AUDIT LOGS (Stories 2, 13, 15, 17) -->
+        <!-- VIEW 6: SUPERADMIN ADMIN MANAGEMENT & AUDIT LOGS -->
         <section id="view-admin-management" class="view-panel">
           <div class="page-title-row">
             <h1 class="page-title" style="color: var(--superadmin-gold);">Superadmin Admin Governance</h1>
           </div>
 
-          <!-- Add Admin Form (Story 2) -->
           <div class="card" style="border-color: var(--superadmin-border); background: var(--superadmin-bg);">
             <h3 style="font-size: 15px; font-weight: 800; color: var(--superadmin-gold); margin-bottom: 6px;">
               Add New Admin Staff Profile
@@ -290,7 +291,6 @@
             </form>
           </div>
 
-          <!-- Admin Directory (Story 15) -->
           <div class="card">
             <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Active Admin Directory</h3>
             <div class="table-responsive">
@@ -311,7 +311,6 @@
             </div>
           </div>
 
-          <!-- System Audit Log (Story 15) -->
           <div class="card">
             <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">System Governance Audit Log</h3>
             <div class="table-responsive">
@@ -332,7 +331,7 @@
           </div>
         </section>
 
-        <!-- VIEW 7: BIN REGISTRATION (Story 4, 23) -->
+        <!-- VIEW 7: BIN REGISTRATION -->
         <section id="view-bin-registration" class="view-panel">
           <div class="page-title-row">
             <h1 class="page-title">Register New Smart Bin</h1>
@@ -388,7 +387,7 @@
           </div>
         </section>
 
-        <!-- VIEW 8: ESP32 SIMULATOR (Story 14) -->
+        <!-- VIEW 8: ESP32 SIMULATOR -->
         <section id="view-simulator" class="view-panel">
           <div class="page-title-row">
             <h1 class="page-title">ESP32 Hardware Telemetry Simulator</h1>
@@ -430,7 +429,7 @@
     </div>
   </div>
 
-  <!-- RED 100% URGENT ALERT POPUP MODAL (Story 8, 21) -->
+  <!-- RED 100% URGENT ALERT POPUP MODAL -->
   <div id="urgent-alert-modal" class="urgent-modal-overlay">
     <div class="urgent-modal-content">
       <div class="urgent-modal-title">
@@ -460,7 +459,7 @@
     </div>
   </div>
 
-  <!-- ASSIGN TASK MODAL (Stories 19, 20, 21) -->
+  <!-- ASSIGN TASK MODAL -->
   <div id="assign-task-modal" class="modal-overlay">
     <div class="modal-card">
       <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 12px;">Assign Waste Collection Task</h3>
@@ -482,14 +481,14 @@
         </div>
 
         <div style="display: flex; gap: 10px; margin-top: 16px;">
-          <button type="submit" class="btn btn-primary" style="flex: 1;">Assign Task & Send SMS</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Assign Task</button>
           <button type="button" class="btn btn-outline" onclick="document.getElementById('assign-task-modal').classList.remove('open')">Cancel</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- SUPERADMIN RESET PASSWORD MODAL (Story 13) -->
+  <!-- SUPERADMIN RESET PASSWORD MODAL -->
   <div id="reset-password-modal" class="modal-overlay">
     <div class="modal-card">
       <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 12px;">Reset Admin Password</h3>
@@ -514,11 +513,11 @@
     </div>
   </div>
 
-  <!-- AUTHENTICATION LOGIN MODAL (Story 3) -->
+  <!-- AUTHENTICATION LOGIN MODAL -->
   <div id="auth-modal" class="modal-overlay open">
     <div class="modal-card">
       <div style="text-align: center; margin-bottom: 20px;">
-        <h2 style="font-size: 18px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">SMARTBIN PORTAL</h2>
+        <h2 style="font-size: 18px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">BINBOT PORTAL</h2>
         <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Log in to access operator dashboard</p>
       </div>
 
