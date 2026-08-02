@@ -514,6 +514,18 @@
     </div>
   </div>
 
+  <!-- CUSTOM CORPORATE CONFIRMATION MODAL (Replaces browser native confirm) -->
+  <div id="confirm-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 420px; text-align: center;">
+      <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 8px;">Confirm Action</h3>
+      <p id="confirm-modal-message" style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Are you sure?</p>
+      <div style="display: flex; gap: 10px;">
+        <button id="btn-confirm-yes" class="btn btn-danger" style="flex: 1;">Yes, Proceed</button>
+        <button type="button" class="btn btn-outline" style="flex: 1;" onclick="app.closeConfirmModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- AUTHENTICATION LOGIN MODAL -->
   <div id="auth-modal" class="modal-overlay open">
     <div class="modal-card">
