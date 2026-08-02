@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { registerStaff, getAllStaff } = require('../controllers/staffController');
+const staffController = require('../controllers/staffController');
 
-router.post('/register', registerStaff);
-router.get('/', getAllStaff);
+router.get('/', staffController.getStaff);
+router.post('/register', staffController.registerStaff);
+router.delete('/:id', staffController.deleteStaff);
 
 module.exports = router;
