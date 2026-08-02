@@ -590,6 +590,49 @@ body {
   gap: 6px;
 }
 
+/* TOAST NOTIFICATIONS (Replaces browser native alerts) */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast-message {
+  background: #000000;
+  color: #ffffff;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+  animation: slideInToast 0.25s ease-out;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 380px;
+}
+
+.toast-message.error {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.toast-message.success {
+  background: var(--success);
+  color: #ffffff;
+}
+
+@keyframes slideInToast {
+  from { transform: translateY(-15px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 /* MODALS */
 .modal-overlay {
   position: fixed;

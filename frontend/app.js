@@ -1,5 +1,4 @@
-// SmartBin ESP32 IoT Enterprise Frontend Engine & Task Dispatch System
-// Clean Root Frontend Copy
+// Binbot ESP32 IoT Enterprise Frontend Engine & Task Dispatch System
 
 const app = {
   currentUser: null,
@@ -15,6 +14,23 @@ const app = {
   map: null,
   markers: [],
 
+  // Custom Toast Notification System (Replaces browser native domain alerts)
+  showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast-message ${type}`;
+    toast.innerText = message;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s ease-out';
+      setTimeout(() => toast.remove(), 300);
+    }, 4000);
+  },
+
   init() {
     this.initSocket();
 
@@ -23,8 +39,9 @@ const app = {
     if (savedUser) {
       try {
         const userObj = JSON.parse(savedUser);
+        // Check 30-minute inactivity session expiration (Story 3)
         if (userObj.sessionExpiresAt && Date.now() > userObj.sessionExpiresAt) {
-          alert('Session Expired: You have been logged out due to 30 minutes of inactivity.');
+          this.showToast('Session Expired: You have been logged out due to 30 minutes of inactivity.', 'error');
           this.logout();
           return;
         }
@@ -57,6 +74,7 @@ const app = {
     }, 3000);
   },
 
+  // Initialize Socket.io for instant hardware alerts (Story 8, 14, 16)
   initSocket() {
     try {
       this.socket = io();
@@ -64,6 +82,7 @@ const app = {
         console.log('Connected to Socket.io real-time server with ID:', this.socket.id);
       });
 
+      // Listen for urgent_bin_full threshold event (Story 8)
       this.socket.on('urgent_bin_full', (data) => {
         console.log('URGENT ALARM RECEIVED VIA SOCKET.IO:', data);
         this.triggerUrgentAlertModal(data);
@@ -75,10 +94,11 @@ const app = {
     }
   },
 
+  // 30-Minute Inactivity Session Timeout Check (Story 3)
   checkSessionTimeout() {
     if (this.currentUser && this.currentUser.sessionExpiresAt) {
       if (Date.now() > this.currentUser.sessionExpiresAt) {
-        alert('Session Timeout: Logged out after 30 minutes of inactivity.');
+        this.showToast('Session Timeout: Logged out after 30 minutes of inactivity.', 'error');
         this.logout();
       }
     }
@@ -117,12 +137,14 @@ const app = {
         localStorage.setItem('smartbin_user', JSON.stringify(data.user));
         this.hideAuthModal();
         this.onLoginSuccess();
+        this.showToast(`Welcome, ${data.user.fullName || data.user.username}!`, 'success');
         return;
       } else {
-        alert(data.error || 'Credentials Invalid');
+        // Display "Credentials Invalid" error toast (Story 3)
+        this.showToast(data.error || 'Credentials Invalid', 'error');
       }
     } catch (err) {
-      alert('Credentials Invalid: Unable to connect to authentication server');
+      this.showToast('Credentials Invalid: Unable to connect to authentication server', 'error');
     }
   },
 
@@ -138,16 +160,26 @@ const app = {
     badge.innerText = isSuperadmin ? 'SUPERADMIN' : 'ADMIN';
     badge.className = `user-role-badge ${isSuperadmin ? 'superadmin' : 'admin'}`;
 
+    // Role Scoping (Stories 10, 15, 17): Role separation between Superadmin and Admin
     const superadminGroup = document.getElementById('superadmin-nav-group');
     const quickAdminBtn = document.getElementById('btn-quick-admin-nav');
+    const navAlerts = document.getElementById('nav-link-alerts');
+    const quickAlertsBtn = document.getElementById('btn-quick-alerts-nav');
 
     if (isSuperadmin) {
       if (superadminGroup) superadminGroup.style.display = 'block';
       if (quickAdminBtn) quickAdminBtn.style.display = 'inline-flex';
+      // Hide Alerts & Tasks from Superadmin Dashboard
+      if (navAlerts) navAlerts.style.display = 'none';
+      if (quickAlertsBtn) quickAlertsBtn.style.display = 'none';
+      if (this.activeTab === 'alerts') this.switchTab('home');
       this.fetchSuperadminData();
     } else {
       if (superadminGroup) superadminGroup.style.display = 'none';
       if (quickAdminBtn) quickAdminBtn.style.display = 'none';
+      if (navAlerts) navAlerts.style.display = 'flex';
+      if (quickAlertsBtn) quickAlertsBtn.style.display = 'inline-flex';
+      // If Admin tries to access Superadmin tab directly, redirect to Home (Story 17)
       if (this.activeTab === 'admin-management' || this.activeTab === 'bin-registration') {
         this.switchTab('home');
       }
@@ -159,14 +191,22 @@ const app = {
   switchTab(tabId) {
     const isSuperadmin = this.currentUser && this.currentUser.role && this.currentUser.role.toLowerCase() === 'superadmin';
 
+    // Role Enforcement (Story 17): Prevent Superadmin from accessing Alerts & Tasks and Admins from Superadmin pages
+    if (tabId === 'alerts' && isSuperadmin) {
+      this.showToast('Access Denied: Alerts & Tasks management is for standard Admins.', 'error');
+      this.switchTab('home');
+      return;
+    }
+
     if ((tabId === 'admin-management' || tabId === 'bin-registration') && !isSuperadmin) {
-      alert('Access Denied: You must be a Superadmin to access this page.');
+      this.showToast('Access Denied: You must be a Superadmin to access this page.', 'error');
       this.switchTab('home');
       return;
     }
 
     this.activeTab = tabId;
 
+    // Toggle view active class
     document.querySelectorAll('.view-panel').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
 
@@ -175,6 +215,7 @@ const app = {
     if (targetView) targetView.classList.add('active');
     if (targetLink) targetLink.classList.add('active');
 
+    // Update Header Back to Home Button (Story 12)
     const btnBackHome = document.getElementById('btn-back-home');
     const breadcrumb = document.getElementById('current-page-breadcrumb');
 
@@ -197,6 +238,7 @@ const app = {
       if (btnBackHome) btnBackHome.style.display = 'inline-flex';
     }
 
+    // Refresh tab data
     if (tabId === 'bins' || tabId === 'home') this.fetchBins();
     if (tabId === 'map') this.renderGoogleMap();
     if (tabId === 'alerts') this.fetchAlerts();
@@ -214,6 +256,7 @@ const app = {
   },
 
   downloadPdfReport() {
+    // Download PDF Report (Story 22)
     window.open('/api/reports/pdf', '_blank');
   },
 
@@ -265,6 +308,7 @@ const app = {
       const metal = bin.compartments ? bin.compartments.metal || 0 : bin.metal || 0;
 
       const isUrgent = dry >= 80 || wet >= 80 || metal >= 80;
+
       const getBarClass = (val) => val >= 80 ? 'danger' : (val >= 60 ? 'warning' : 'normal');
 
       return `
@@ -280,6 +324,7 @@ const app = {
             }
           </div>
 
+          <!-- Dry Waste Compartment (Story 1) -->
           <div class="compartment-row">
             <div class="compartment-label">
               <span>Dry Waste</span>
@@ -290,6 +335,7 @@ const app = {
             </div>
           </div>
 
+          <!-- Wet Waste Compartment (Story 5) -->
           <div class="compartment-row">
             <div class="compartment-label">
               <span>Wet Waste</span>
@@ -300,6 +346,7 @@ const app = {
             </div>
           </div>
 
+          <!-- Metal Waste Compartment (Story 6) -->
           <div class="compartment-row">
             <div class="compartment-label">
               <span>Metal Waste</span>
@@ -326,33 +373,78 @@ const app = {
     }).join('');
   },
 
+  // Live Interactive Map Engine (Story 23)
   renderGoogleMap() {
     const mapEl = document.getElementById('google-map');
     if (!mapEl) return;
 
-    mapEl.innerHTML = `
-      <div style="padding: 20px; text-align: center; background: #fafafa; border-radius: 8px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-        <h4 style="font-weight: 800; font-size: 16px; margin-bottom: 8px;">GPS GEOLOCATION MAP PINS</h4>
-        <p style="font-size: 12px; color: var(--text-muted); max-width: 450px; margin-bottom: 16px;">
-          Bins rendered using manual latitude & longitude coordinates. Bins at 80%+ capacity display high-priority Orange alert markers.
-        </p>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%;">
-          ${this.bins.map(b => {
-            const isUrgent = (b.compartments?.dry >= 80 || b.compartments?.wet >= 80 || b.compartments?.metal >= 80);
-            return `
-              <div style="padding: 12px 16px; background: #ffffff; border: 2px solid ${isUrgent ? 'var(--warning)' : '#d1d5db'}; border-radius: 6px; text-align: left; min-width: 220px;">
-                <div style="font-weight: 800; font-size: 14px;">${b.binId} ${isUrgent ? '<span style="color: var(--warning); font-size: 10px; font-weight: 800;">[ORANGE ALERT MARKER]</span>' : ''}</div>
-                <div style="font-size: 11px; color: var(--text-muted);">${b.location}</div>
-                <div style="font-size: 10px; color: #6b7280; margin-top: 4px;">Lat: ${b.latitude || -33.8688}, Lng: ${b.longitude || 151.2093}</div>
-                <button class="btn btn-sm btn-primary" style="margin-top: 8px; width: 100%;" onclick="app.openAssignTaskModal('${b.binId}', 'dry')">Assign Task</button>
-              </div>
-            `;
-          }).join('')}
+    if (!window.L) {
+      mapEl.innerHTML = `<div style="padding: 20px; text-align: center;">Loading interactive map engine...</div>`;
+      return;
+    }
+
+    if (!this.map) {
+      mapEl.innerHTML = '';
+      this.map = L.map('google-map').setView([-33.8688, 151.2093], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(this.map);
+    } else {
+      setTimeout(() => { if (this.map) this.map.invalidateSize(); }, 200);
+    }
+
+    // Clear existing markers
+    if (this.markers) {
+      this.markers.forEach(m => this.map.removeLayer(m));
+    }
+    this.markers = [];
+
+    if (!this.bins || this.bins.length === 0) {
+      return;
+    }
+
+    const bounds = [];
+
+    this.bins.forEach(bin => {
+      const lat = bin.latitude !== undefined ? Number(bin.latitude) : -33.8688;
+      const lng = bin.longitude !== undefined ? Number(bin.longitude) : 151.2093;
+      bounds.push([lat, lng]);
+
+      const dry = bin.compartments?.dry || 0;
+      const wet = bin.compartments?.wet || 0;
+      const metal = bin.compartments?.metal || 0;
+      const maxFill = Math.max(dry, wet, metal);
+      const isUrgent = maxFill >= 80;
+
+      // Create interactive marker (Orange marker for 80%+ capacity bins, Green for normal)
+      const marker = L.circleMarker([lat, lng], {
+        color: isUrgent ? '#ea580c' : '#059669',
+        fillColor: isUrgent ? '#ea580c' : '#059669',
+        fillOpacity: 0.85,
+        radius: isUrgent ? 12 : 9
+      }).addTo(this.map);
+
+      const popupContent = `
+        <div style="font-family: Inter, sans-serif; padding: 4px; width: 200px;">
+          <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-bottom: 2px;">${bin.binId}</div>
+          <div style="font-size: 11px; color: #64748b;">${bin.location}</div>
+          <div style="margin-top: 6px; font-size: 12px; font-weight: 700; color: ${isUrgent ? '#ea580c' : '#059669'};">
+            ${isUrgent ? 'ORANGE ALERT: ' + maxFill + '% Capacity' : 'NORMAL: ' + maxFill + '% Capacity'}
+          </div>
+          <button class="btn btn-sm btn-primary" style="margin-top: 8px; width: 100%;" onclick="app.openAssignTaskModal('${bin.binId}', 'dry')">Assign Task</button>
         </div>
-      </div>
-    `;
+      `;
+
+      marker.bindPopup(popupContent);
+      this.markers.push(marker);
+    });
+
+    if (bounds.length > 0) {
+      this.map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+    }
   },
 
+  // Trigger Red 100% Urgent Alert Popup Modal (Story 8, 21)
   triggerUrgentAlertModal(data) {
     document.getElementById('urgent-modal-location').innerText = data.location || 'Unknown Location';
     document.getElementById('urgent-modal-bin-id').innerText = data.binId || 'BIN';
@@ -360,6 +452,7 @@ const app = {
     document.getElementById('urgent-modal-level').innerText = (data.fillLevel || 80) + '%';
     document.getElementById('urgent-modal-time').innerText = new Date(data.timestamp || Date.now()).toLocaleTimeString();
 
+    // Store data on popup modal button
     const assignBtn = document.getElementById('btn-modal-assign-task');
     if (assignBtn) {
       assignBtn.setAttribute('data-bin-id', data.binId);
@@ -384,12 +477,14 @@ const app = {
     this.openAssignTaskModal(binId, compartment, alertId);
   },
 
+  // Open Task Assignment Modal (Stories 19, 20, 21)
   async openAssignTaskModal(binId, compartment, alertId = '') {
     document.getElementById('assign-target-bin-id').value = binId;
     document.getElementById('assign-target-compartment').value = compartment;
     document.getElementById('assign-target-alert-id').value = alertId;
     document.getElementById('assign-target-details').value = `Bin ${binId} (${(compartment || 'DRY').toUpperCase()} compartment)`;
 
+    // Populate staff dropdown
     const select = document.getElementById('assign-staff-select');
     select.innerHTML = '<option value="">-- Select Staff Member --</option>';
 
@@ -406,6 +501,7 @@ const app = {
     document.getElementById('assign-task-modal').classList.add('open');
   },
 
+  // Execute Task Assignment (Stories 20, 21)
   async executeAssignTask(e) {
     e.preventDefault();
     const staffId = document.getElementById('assign-staff-select').value;
@@ -414,7 +510,7 @@ const app = {
     const alertId = document.getElementById('assign-target-alert-id').value;
 
     if (!staffId) {
-      alert('Please select a staff member to assign.');
+      this.showToast('Please select a staff member to assign.', 'error');
       return;
     }
 
@@ -427,16 +523,16 @@ const app = {
 
       const data = await res.json();
       if (res.ok) {
-        alert(`${data.message} (SMS Status: ${data.smsStatus})`);
+        this.showToast(data.message || 'Task Assigned Successfully', 'success');
         document.getElementById('assign-task-modal').classList.remove('open');
         this.fetchBins();
         this.fetchAlerts();
         this.fetchStaff();
       } else {
-        alert(data.error || 'Failed to assign task');
+        this.showToast(data.error || 'Failed to assign task', 'error');
       }
     } catch (err) {
-      alert('Error connecting to task assignment server');
+      this.showToast('Error connecting to task assignment server', 'error');
     }
   },
 
@@ -459,6 +555,7 @@ const app = {
     } catch (e) {}
   },
 
+  // STAFF MANAGEMENT (Story 18)
   async fetchStaff() {
     try {
       const res = await fetch('/api/staff');
@@ -487,16 +584,17 @@ const app = {
 
       const data = await res.json();
       if (res.ok) {
-        alert(data.message || 'Staff Member Registered Successfully');
+        // Display custom toast notification (No browser domain title) (Story 18)
+        this.showToast(data.message || 'Staff Member Registered Successfully', 'success');
         document.getElementById('staff-first-name').value = '';
         document.getElementById('staff-last-name').value = '';
         document.getElementById('staff-phone').value = '';
         this.fetchStaff();
       } else {
-        alert(data.error || 'Failed to register staff member');
+        this.showToast(data.error || 'Failed to register staff member', 'error');
       }
     } catch (err) {
-      alert('Error registering staff member');
+      this.showToast('Error registering staff member', 'error');
     }
   },
 
@@ -523,6 +621,7 @@ const app = {
     `).join('');
   },
 
+  // SUPERADMIN: Create New Admin (Story 2)
   async handleCreateAdmin(e) {
     e.preventDefault();
     const firstName = document.getElementById('admin-first-name').value.trim();
@@ -539,14 +638,15 @@ const app = {
 
       const data = await res.json();
       if (res.ok) {
-        alert('Profile Successfully Created');
+        // Display "Profile Successfully Created" success toast (Story 2)
+        this.showToast('Profile Successfully Created', 'success');
         document.getElementById('form-add-admin').reset();
         this.fetchSuperadminData();
       } else {
-        alert(data.error || 'Failed to create admin profile');
+        this.showToast(data.error || 'Failed to create admin profile', 'error');
       }
     } catch (err) {
-      alert('Error connecting to server');
+      this.showToast('Error connecting to server', 'error');
     }
   },
 
@@ -643,14 +743,14 @@ const app = {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message);
+        this.showToast(data.message, 'success');
         document.getElementById('reset-password-modal').classList.remove('open');
         this.fetchSuperadminData();
       } else {
-        alert(data.error || 'Failed to reset password');
+        this.showToast(data.error || 'Failed to reset password', 'error');
       }
     } catch (err) {
-      alert('Error resetting password');
+      this.showToast('Error resetting password', 'error');
     }
   },
 
@@ -662,11 +762,11 @@ const app = {
       const res = await fetch(`/api/auth/admins/${userId}/suspend`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message);
+        this.showToast(data.message, 'success');
         this.fetchSuperadminData();
       }
     } catch (err) {
-      alert('Error updating admin status');
+      this.showToast('Error updating admin status', 'error');
     }
   },
 
@@ -678,11 +778,11 @@ const app = {
       const res = await fetch(`/api/auth/admins/${userId}`, { method: 'DELETE' });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message);
+        this.showToast(data.message, 'success');
         this.fetchSuperadminData();
       }
     } catch (err) {
-      alert('Error deleting admin');
+      this.showToast('Error deleting admin', 'error');
     }
   },
 
@@ -704,15 +804,15 @@ const app = {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message || 'Bin Registered Successfully');
+        this.showToast(data.message || 'Bin Registered Successfully', 'success');
         document.getElementById('reg-bin-id').value = '';
         document.getElementById('reg-bin-location').value = '';
         this.fetchBins();
       } else {
-        alert(data.error || 'Bin registration failed');
+        this.showToast(data.error || 'Bin registration failed', 'error');
       }
     } catch (err) {
-      alert('Error registering bin');
+      this.showToast('Error registering bin', 'error');
     }
   },
 
@@ -780,7 +880,7 @@ const app = {
         this.fetchAlerts();
       }
     } catch (err) {
-      alert('Error acknowledging alert');
+      this.showToast('Error acknowledging alert', 'error');
     }
   },
 
@@ -792,7 +892,7 @@ const app = {
         this.fetchAlerts();
       }
     } catch (err) {
-      alert('Error resetting bin level');
+      this.showToast('Error resetting bin level', 'error');
     }
   },
 
@@ -804,14 +904,14 @@ const app = {
       const res = await fetch(`/api/bins/${binId}`, { method: 'DELETE' });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message);
+        this.showToast(data.message, 'success');
         this.fetchBins();
         this.fetchAlerts();
       } else {
-        alert(data.error || 'Failed to delete bin');
+        this.showToast(data.error || 'Failed to delete bin', 'error');
       }
     } catch (err) {
-      alert('Error deleting bin');
+      this.showToast('Error deleting bin', 'error');
     }
   },
 
@@ -828,11 +928,11 @@ const app = {
         body: JSON.stringify({ binId, dry, wet, metal })
       });
       const data = await res.json();
-      alert(data.message);
+      this.showToast(data.message, 'success');
       this.fetchBins();
       this.fetchAlerts();
     } catch (err) {
-      alert('Error sending hardware telemetry');
+      this.showToast('Error sending hardware telemetry', 'error');
     }
   }
 };
