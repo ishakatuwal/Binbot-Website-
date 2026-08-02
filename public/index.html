@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Waste Management System - Enterprise Operator & Superadmin Portal</title>
+  <title>Smart Waste Management System - Corporate Operator Portal</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="/socket.io/socket.io.js"></script>
@@ -12,15 +12,15 @@
 
   <div class="app-layout">
 
-    <!-- COLLAPSIBLE SIDEBAR NAVIGATION (Stories 9, 10) -->
+    <!-- PERSISTENT COLLAPSIBLE SIDEBAR (Stories 9, 10, 17) -->
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-header">
         <a href="#" class="sidebar-brand" onclick="app.switchTab('home')">
-          <span class="sidebar-brand-icon">♻️</span>
-          <span class="sidebar-brand-text">SmartBin IoT</span>
+          <span class="sidebar-brand-text">SMARTBIN</span>
+          <span class="brand-tag">CORPORATE</span>
         </a>
         <button class="btn-toggle-sidebar" onclick="app.toggleSidebar()" title="Toggle Sidebar">
-          <span>◀</span>
+          <span>|&lt;</span>
         </button>
       </div>
 
@@ -28,38 +28,40 @@
         <div class="nav-section-title">Navigation</div>
         
         <div id="nav-link-home" class="nav-link active" onclick="app.switchTab('home')">
-          <span class="nav-icon">🏠</span>
           <span class="nav-text">Home</span>
         </div>
 
         <div id="nav-link-bins" class="nav-link" onclick="app.switchTab('bins')">
-          <span class="nav-icon">📊</span>
           <span class="nav-text">Live Bins</span>
         </div>
 
-        <div id="nav-link-alerts" class="nav-link" onclick="app.switchTab('alerts')">
-          <span class="nav-icon">🚨</span>
-          <span class="nav-text">Alerts & Logs</span>
+        <div id="nav-link-map" class="nav-link" onclick="app.switchTab('map')">
+          <span class="nav-text">Google Map View</span>
         </div>
 
-        <!-- Superadmin Restricted Nav Links (Story 10, 15, 17) -->
+        <div id="nav-link-alerts" class="nav-link" onclick="app.switchTab('alerts')">
+          <span class="nav-text">Alerts & Tasks</span>
+        </div>
+
+        <div id="nav-link-staff" class="nav-link" onclick="app.switchTab('staff')">
+          <span class="nav-text">Staff Management</span>
+        </div>
+
+        <!-- Superadmin Restricted Nav Group (Stories 10, 15, 17) -->
         <div id="superadmin-nav-group" style="display: none;">
           <div class="nav-section-title" style="color: var(--superadmin-gold);">Superadmin</div>
 
           <div id="nav-link-admin-management" class="nav-link" onclick="app.switchTab('admin-management')">
-            <span class="nav-icon">👥</span>
             <span class="nav-text">Admin Management</span>
           </div>
 
           <div id="nav-link-bin-registration" class="nav-link" onclick="app.switchTab('bin-registration')">
-            <span class="nav-icon">➕</span>
             <span class="nav-text">Register New Bin</span>
           </div>
         </div>
 
         <div class="nav-section-title">Developer Tools</div>
         <div id="nav-link-simulator" class="nav-link" onclick="app.switchTab('simulator')">
-          <span class="nav-icon">⚡</span>
           <span class="nav-text">ESP32 Simulator</span>
         </div>
       </nav>
@@ -73,17 +75,17 @@
         <div class="header-left">
           <!-- Back to Home Button (Story 12) - hidden on Home view -->
           <button id="btn-back-home" class="btn-back-home" style="display: none;" onclick="app.switchTab('home')">
-            <span>←</span> Back to Home
+            Back to Home
           </button>
-          <span id="current-page-breadcrumb" style="font-size: 14px; font-weight: 600; color: var(--text-muted);">
+          <span id="current-page-breadcrumb" style="font-size: 12px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
             Home Dashboard
           </span>
         </div>
 
         <div class="header-right">
-          <div id="user-role-badge" class="user-role-badge admin">Admin</div>
+          <div id="user-role-badge" class="user-role-badge admin">ADMIN</div>
           <button class="btn-logout" onclick="app.logout()">
-            <span>🚪</span> Logout
+            Logout
           </button>
         </div>
       </header>
@@ -94,8 +96,11 @@
         <!-- VIEW 1: HOME DASHBOARD -->
         <section id="view-home" class="view-panel active">
           <div class="page-title-row">
-            <h1 class="page-title"><span>🏠</span> Waste Management Overview</h1>
-            <button class="btn btn-sm btn-outline" onclick="app.refreshAll()">🔄 Refresh System</button>
+            <h1 class="page-title">Waste Management Overview</h1>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-primary" onclick="app.downloadPdfReport()">Download PDF Report</button>
+              <button class="btn btn-outline" onclick="app.refreshAll()">Refresh System</button>
+            </div>
           </div>
 
           <!-- Overview Stats Cards -->
@@ -109,18 +114,21 @@
               <div id="stat-urgent-bins" class="stat-value">0</div>
             </div>
             <div class="stat-card success-stat">
-              <div class="stat-label">Active System Status</div>
-              <div class="stat-value" style="font-size: 18px; color: var(--success);">🟢 ONLINE</div>
+              <div class="stat-label">Available Staff Members</div>
+              <div id="stat-total-staff" class="stat-value">0</div>
             </div>
           </div>
 
-          <!-- Quick Navigation Shortcuts -->
+          <!-- Quick Actions & Reporting -->
           <div class="card">
-            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">⚡ Quick Operations</h3>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-              <button class="btn btn-primary" onclick="app.switchTab('bins')">📊 View Live Smart Bins</button>
-              <button class="btn btn-outline" onclick="app.switchTab('alerts')">🚨 View Overflow Alerts</button>
-              <button id="btn-quick-admin-nav" class="btn btn-warning" style="display: none;" onclick="app.switchTab('admin-management')">👥 Manage Admin Staff</button>
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Quick Operations & Documentation</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button class="btn btn-outline" onclick="app.switchTab('bins')">View Live Bins</button>
+              <button class="btn btn-outline" onclick="app.switchTab('map')">View Map Pins</button>
+              <button class="btn btn-outline" onclick="app.switchTab('alerts')">View Overflow Alerts</button>
+              <button class="btn btn-outline" onclick="app.switchTab('staff')">Manage Staff</button>
+              <button class="btn btn-primary" onclick="app.downloadPdfReport()">Download PDF Report</button>
+              <button class="btn btn-warning" onclick="window.open('/download-viva-guide', '_blank')">Download Viva Guide</button>
             </div>
           </div>
         </section>
@@ -128,20 +136,35 @@
         <!-- VIEW 2: LIVE BINS LIST -->
         <section id="view-bins" class="view-panel">
           <div class="page-title-row">
-            <h1 class="page-title"><span>📊</span> Live Smart Bins & Capacity Levels</h1>
-            <button class="btn btn-sm btn-outline" onclick="app.fetchBins()">🔄 Refresh Bins</button>
+            <h1 class="page-title">Live Smart Bins & Capacity Levels</h1>
+            <button class="btn btn-sm btn-outline" onclick="app.fetchBins()">Refresh Bins</button>
           </div>
 
           <div id="bins-container" class="bins-grid">
-            <!-- Dynamically populated by JS -->
+            <!-- Populated by JS -->
           </div>
         </section>
 
-        <!-- VIEW 3: OVERFLOW ALERTS & LOGS (Stories 1, 5, 6, 7) -->
+        <!-- VIEW 3: GOOGLE MAP VIEW (Story 23) -->
+        <section id="view-map" class="view-panel">
+          <div class="page-title-row">
+            <h1 class="page-title">Google Maps Geolocation Pins</h1>
+            <button class="btn btn-sm btn-outline" onclick="app.renderGoogleMap()">Refresh Map Pins</button>
+          </div>
+
+          <div class="card">
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Normal bins render standard markers. Bins at 100% capacity render high-priority Orange alert markers. Click markers to assign task.
+            </p>
+            <div id="google-map" class="map-container"></div>
+          </div>
+        </section>
+
+        <!-- VIEW 4: ALERTS & TASK ASSIGNMENT LOG (Stories 1, 5, 6, 7, 19, 20, 21) -->
         <section id="view-alerts" class="view-panel">
           <div class="page-title-row">
-            <h1 class="page-title"><span>🚨</span> Hardware Overflow Alert History</h1>
-            <button class="btn btn-sm btn-outline" onclick="app.fetchAlerts()">🔄 Refresh Log</button>
+            <h1 class="page-title">Hardware Overflow Alerts & Task Assignments</h1>
+            <button class="btn btn-sm btn-outline" onclick="app.fetchAlerts()">Refresh Log</button>
           </div>
 
           <div class="card">
@@ -151,11 +174,11 @@
                   <tr>
                     <th>Timestamp</th>
                     <th>Bin ID</th>
-                    <th>Location</th>
-                    <th>Waste Type</th>
-                    <th>Fill Level</th>
+                    <th>Location Address</th>
+                    <th>Category</th>
+                    <th>Fill Percentage</th>
                     <th>Status</th>
-                    <th>Action</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="alerts-table-body">
@@ -166,19 +189,75 @@
           </div>
         </section>
 
-        <!-- VIEW 4: SUPERADMIN ADMIN MANAGEMENT & AUDIT LOGS (Stories 2, 13, 15) -->
+        <!-- VIEW 5: STAFF MANAGEMENT (Story 18) -->
+        <section id="view-staff" class="view-panel">
+          <div class="page-title-row">
+            <h1 class="page-title">Waste Collection Staff Management</h1>
+          </div>
+
+          <!-- Register Staff Form (Story 18) -->
+          <div class="card">
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">Register Collection Staff Member</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Register collection operators. Duplicate phone numbers are rejected by system database validation.
+            </p>
+
+            <form onsubmit="app.handleRegisterStaff(event)">
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label class="form-label">First Name</label>
+                  <input type="text" id="staff-first-name" class="form-input" placeholder="e.g. David" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Last Name</label>
+                  <input type="text" id="staff-last-name" class="form-input" placeholder="e.g. Miller" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Phone Number (SMS Dispatch)</label>
+                  <input type="tel" id="staff-phone" class="form-input" placeholder="e.g. +14155552671" required>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                Register Staff Member
+              </button>
+            </form>
+          </div>
+
+          <!-- Staff Directory Table -->
+          <div class="card">
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Registered Collection Staff Directory</h3>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Full Name</th>
+                    <th>Phone Number</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="staff-table-body">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 6: SUPERADMIN ADMIN MANAGEMENT & AUDIT LOGS (Stories 2, 13, 15, 17) -->
         <section id="view-admin-management" class="view-panel">
           <div class="page-title-row">
-            <h1 class="page-title" style="color: var(--superadmin-gold);"><span>👑</span> Superadmin Admin Management</h1>
+            <h1 class="page-title" style="color: var(--superadmin-gold);">Superadmin Admin Governance</h1>
           </div>
 
           <!-- Add Admin Form (Story 2) -->
           <div class="card" style="border-color: var(--superadmin-border); background: var(--superadmin-bg);">
-            <h3 style="font-size: 16px; font-weight: 700; color: var(--superadmin-gold); margin-bottom: 6px;">
-              ➕ Add New Admin Staff Account
+            <h3 style="font-size: 15px; font-weight: 800; color: var(--superadmin-gold); margin-bottom: 6px;">
+              Add New Admin Staff Profile
             </h3>
             <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-              Create staff accounts for City Council operators to monitor the smart waste dashboard. Passwords are automatically encrypted with bcrypt.
+              Create staff accounts for City Council operators. Passwords are encrypted automatically using bcrypt.
             </p>
 
             <form id="form-add-admin" onsubmit="app.handleCreateAdmin(event)">
@@ -201,24 +280,24 @@
                 <div class="form-group">
                   <label class="form-label">Password</label>
                   <input type="password" id="admin-password" class="form-input" placeholder="Min 6 characters" minlength="6" required>
-                  <div class="form-hint">Password Strength Criteria: Minimum 6 characters</div>
+                  <div class="form-hint">Password Criteria: Minimum 6 characters</div>
                 </div>
               </div>
 
               <button type="submit" class="btn btn-primary">
-                💾 Create Admin Profile
+                Create Admin Profile
               </button>
             </form>
           </div>
 
           <!-- Admin Directory (Story 15) -->
           <div class="card">
-            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">👥 Active Admin Directory</h3>
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Active Admin Directory</h3>
             <div class="table-responsive">
               <table class="table">
                 <thead>
                   <tr>
-                    <th>Name</th>
+                    <th>Full Name</th>
                     <th>Email</th>
                     <th>Username</th>
                     <th>Status</th>
@@ -234,7 +313,7 @@
 
           <!-- System Audit Log (Story 15) -->
           <div class="card">
-            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">📜 Administrative Audit Log</h3>
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">System Governance Audit Log</h3>
             <div class="table-responsive">
               <table class="table">
                 <thead>
@@ -253,16 +332,16 @@
           </div>
         </section>
 
-        <!-- VIEW 5: BIN REGISTRATION (Story 4) -->
+        <!-- VIEW 7: BIN REGISTRATION (Story 4, 23) -->
         <section id="view-bin-registration" class="view-panel">
           <div class="page-title-row">
-            <h1 class="page-title"><span>➕</span> Register New Smart Bin</h1>
+            <h1 class="page-title">Register New Smart Bin</h1>
           </div>
 
           <div class="card" style="max-width: 600px;">
-            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 6px;">Bin Infrastructure Metadata</h3>
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">Bin Metadata & Map Coordinates</h3>
             <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
-              Input unique Bin ID and location address. Duplicate Bin IDs will be rejected by database validation.
+              Input unique Bin ID, geographical address, and latitude/longitude coordinates for Google Maps marker placement.
             </p>
 
             <form onsubmit="app.handleRegisterBin(event)">
@@ -272,42 +351,53 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label">Geographical Location Address</label>
+                <label class="form-label">Geographical Address</label>
                 <input type="text" id="reg-bin-location" class="form-input" placeholder="e.g. 104 Main Street Market Plaza" required>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label class="form-label">Latitude Coordinate</label>
+                  <input type="number" step="any" id="reg-bin-lat" class="form-input" placeholder="e.g. -33.8688" value="-33.8688" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Longitude Coordinate</label>
+                  <input type="number" step="any" id="reg-bin-lng" class="form-input" placeholder="e.g. 151.2093" value="151.2093" required>
+                </div>
               </div>
 
               <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                 <div class="form-group">
-                  <label class="form-label">Initial Dry (%)</label>
+                  <label class="form-label">Dry Waste (%)</label>
                   <input type="number" id="reg-bin-dry" class="form-input" min="0" max="100" value="0">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Initial Wet (%)</label>
+                  <label class="form-label">Wet Waste (%)</label>
                   <input type="number" id="reg-bin-wet" class="form-input" min="0" max="100" value="0">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Initial Metal (%)</label>
+                  <label class="form-label">Metal Waste (%)</label>
                   <input type="number" id="reg-bin-metal" class="form-input" min="0" max="100" value="0">
                 </div>
               </div>
 
               <button type="submit" class="btn btn-success" style="width: 100%; margin-top: 10px;">
-                ➕ Save Smart Bin to Database
+                Save Bin to Database
               </button>
             </form>
           </div>
         </section>
 
-        <!-- VIEW 6: ESP32 SIMULATOR & TELEMETRY API (Story 14) -->
+        <!-- VIEW 8: ESP32 SIMULATOR (Story 14) -->
         <section id="view-simulator" class="view-panel">
           <div class="page-title-row">
-            <h1 class="page-title"><span>⚡</span> ESP32 Telemetry Hardware Simulator</h1>
+            <h1 class="page-title">ESP32 Hardware Telemetry Simulator</h1>
           </div>
 
           <div class="card" style="max-width: 600px;">
-            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 6px;">📡 Test ESP32 Ultrasonic Sensor Payload</h3>
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">Test Telemetry Sensor Payload</h3>
             <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
-              Send hardware telemetry payloads to trigger the 80%+ threshold red alert engine instantly.
+              Send hardware telemetry payloads. Set any compartment to 100% to trigger the red alert popup instantly.
             </p>
 
             <div class="form-group">
@@ -318,7 +408,7 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
               <div class="form-group">
                 <label class="form-label">Dry Waste (%)</label>
-                <input type="number" id="sim-dry" class="form-input" min="0" max="100" value="85">
+                <input type="number" id="sim-dry" class="form-input" min="0" max="100" value="100">
               </div>
               <div class="form-group">
                 <label class="form-label">Wet Waste (%)</label>
@@ -331,7 +421,7 @@
             </div>
 
             <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="app.sendSimulatedTelemetry()">
-              📡 Send ESP32 Hardware Payload (POST /api/bins/esp32-update)
+              Send Telemetry Payload (POST /api/bins/esp32-update)
             </button>
           </div>
         </section>
@@ -340,11 +430,11 @@
     </div>
   </div>
 
-  <!-- RED URGENT ALERT POPUP MODAL (Story 8) -->
+  <!-- RED 100% URGENT ALERT POPUP MODAL (Story 8, 21) -->
   <div id="urgent-alert-modal" class="urgent-modal-overlay">
     <div class="urgent-modal-content">
       <div class="urgent-modal-title">
-        <span>🚨 URGENT OVERFLOW ALERT!</span>
+        URGENT OVERFLOW ALERT
       </div>
 
       <div class="urgent-text-red">
@@ -352,23 +442,57 @@
       </div>
 
       <div class="urgent-details-box">
-        <div>📍 <strong>Location:</strong> <span id="urgent-modal-location">Central Plaza</span></div>
-        <div>🗑️ <strong>Bin ID:</strong> <code id="urgent-modal-bin-id">BIN-101</code></div>
-        <div>📦 <strong>Compartment:</strong> <strong id="urgent-modal-compartment" style="text-transform: uppercase;">DRY</strong></div>
-        <div>📊 <strong>Fill Level:</strong> <span id="urgent-modal-level" style="font-weight: 800;">85%</span></div>
-        <div>🕒 <strong>Timestamp:</strong> <span id="urgent-modal-time">12:00 PM</span></div>
+        <div><strong>Location Address:</strong> <span id="urgent-modal-location">Central Plaza</span></div>
+        <div><strong>Bin ID:</strong> <code id="urgent-modal-bin-id">BIN-101</code></div>
+        <div><strong>Compartment:</strong> <strong id="urgent-modal-compartment" style="text-transform: uppercase;">DRY</strong></div>
+        <div><strong>Fill Level:</strong> <span id="urgent-modal-level" style="font-weight: 800;">100%</span></div>
+        <div><strong>Timestamp:</strong> <span id="urgent-modal-time">12:00 PM</span></div>
       </div>
 
-      <button class="btn btn-danger" style="width: 100%; font-size: 14px; font-weight: 700;" onclick="app.closeUrgentModal()">
-        ✖ Dismiss Alert
-      </button>
+      <div style="display: flex; gap: 10px;">
+        <button id="btn-modal-assign-task" class="btn btn-primary" style="flex: 1;" onclick="app.openAssignTaskModalFromUrgent()">
+          Assign Task
+        </button>
+        <button class="btn btn-danger" style="flex: 1;" onclick="app.closeUrgentModal()">
+          Dismiss Alert
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- SUPERADMIN RESET PASSWORD ACTION MODAL (Story 13) -->
+  <!-- ASSIGN TASK MODAL (Stories 19, 20, 21) -->
+  <div id="assign-task-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 12px;">Assign Waste Collection Task</h3>
+      <form onsubmit="app.executeAssignTask(event)">
+        <input type="hidden" id="assign-target-bin-id">
+        <input type="hidden" id="assign-target-compartment">
+        <input type="hidden" id="assign-target-alert-id">
+
+        <div class="form-group">
+          <label class="form-label">Target Bin & Compartment</label>
+          <input type="text" id="assign-target-details" class="form-input" readonly>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Select Registered Collection Staff</label>
+          <select id="assign-staff-select" class="form-input" required>
+            <option value="">-- Select Staff Member --</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Assign Task & Send SMS</button>
+          <button type="button" class="btn btn-outline" onclick="document.getElementById('assign-task-modal').classList.remove('open')">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SUPERADMIN RESET PASSWORD MODAL (Story 13) -->
   <div id="reset-password-modal" class="modal-overlay">
     <div class="modal-card">
-      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 12px;">🔑 Reset Admin Password</h3>
+      <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 12px;">Reset Admin Password</h3>
       <form onsubmit="app.executePasswordReset(event)">
         <input type="hidden" id="reset-target-user-id">
         <div class="form-group">
@@ -379,11 +503,11 @@
         <div class="form-group">
           <label class="form-label">Set New Password</label>
           <input type="password" id="reset-new-pass" class="form-input" placeholder="Min 6 characters" minlength="6" required>
-          <div class="form-hint">Password Strength Criteria: Minimum 6 characters</div>
+          <div class="form-hint">Password Criteria: Minimum 6 characters</div>
         </div>
 
         <div style="display: flex; gap: 10px; margin-top: 16px;">
-          <button type="submit" class="btn btn-primary" style="flex: 1;">Save New Password</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Save Password</button>
           <button type="button" class="btn btn-outline" onclick="document.getElementById('reset-password-modal').classList.remove('open')">Cancel</button>
         </div>
       </form>
@@ -394,9 +518,8 @@
   <div id="auth-modal" class="modal-overlay open">
     <div class="modal-card">
       <div style="text-align: center; margin-bottom: 20px;">
-        <span style="font-size: 36px;">♻️</span>
-        <h2 style="font-size: 20px; font-weight: 800; color: var(--text-main); margin-top: 4px;">SmartBin IoT Portal</h2>
-        <p style="font-size: 12px; color: var(--text-muted);">Log in to access operator dashboard</p>
+        <h2 style="font-size: 18px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">SMARTBIN PORTAL</h2>
+        <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Log in to access operator dashboard</p>
       </div>
 
       <form id="form-login" onsubmit="app.handleLogin(event)">
@@ -411,12 +534,12 @@
         </div>
 
         <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
-          🔑 Log In
+          Log In
         </button>
 
-        <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border: 1px border-color; border-radius: var(--radius-md); font-size: 11px; color: var(--text-muted);">
-          <div style="font-weight: 700; color: var(--text-main); margin-bottom: 4px;">💡 Demo Default Logins:</div>
-          <div>👑 <strong>Superadmin:</strong> <code style="color: var(--superadmin-gold);">superadmin</code> / <code>admin123password</code></div>
+        <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 11px; color: var(--text-muted);">
+          <div style="font-weight: 700; color: var(--text-main); margin-bottom: 4px;">Default System Login:</div>
+          <div>Superadmin: <code style="color: var(--superadmin-gold);">superadmin</code> / <code>admin123password</code></div>
         </div>
       </form>
     </div>

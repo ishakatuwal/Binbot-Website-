@@ -1,6 +1,6 @@
 /**
  * backend/models/Alert.js
- * Tracks historical overflow events for dry, wet, and metal waste bins.
+ * Historical alert tracking with task assignment linking.
  */
 
 const mongoose = require('mongoose');
@@ -32,11 +32,28 @@ const alertSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['UNRESOLVED', 'ACKNOWLEDGED', 'RESOLVED'],
+      enum: ['UNRESOLVED', 'ACKNOWLEDGED', 'RESOLVED', 'ASSIGNED'],
       default: 'UNRESOLVED'
     },
     acknowledgedBy: {
       type: String,
+      default: null
+    },
+    isAssigned: {
+      type: Boolean,
+      default: false
+    },
+    assignedStaffName: {
+      type: String,
+      default: null
+    },
+    assignedStaffPhone: {
+      type: String,
+      default: null
+    },
+    taskId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Task',
       default: null
     },
     message: {

@@ -1,6 +1,6 @@
 /**
  * backend/models/User.js
- * User Schema supporting Superadmin & Admin roles, bcrypt password encryption, and suspension state.
+ * User Schema supporting Superadmin, Admin, and Staff roles with bcrypt encryption.
  */
 
 const mongoose = require('mongoose');
@@ -42,8 +42,8 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: {
-        values: ['Superadmin', 'Admin'],
-        message: 'Role must be either Superadmin or Admin'
+        values: ['Superadmin', 'Admin', 'Staff'],
+        message: 'Role must be Superadmin, Admin, or Staff'
       },
       default: 'Admin',
       required: true
@@ -63,7 +63,6 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Hash password with bcrypt before saving
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   try {
@@ -75,9 +74,7 @@ userSchema.pre('save', async function (next) {
   }
 });
 
-// Instance method to compare password during login
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  // If plain-text fallback (legacy), compare directly; otherwise use bcrypt
   if (this.password && !this.password.startsWith('$2a$') && !this.password.startsWith('$2b$')) {
     return candidatePassword === this.password;
   }

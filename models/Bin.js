@@ -1,6 +1,6 @@
 /**
  * backend/models/Bin.js
- * Bin Schema tracking location and dry, wet, metal fill levels as percentages.
+ * Bin Schema tracking location, manual GPS coordinates (latitude/longitude), and dry, wet, metal compartments.
  */
 
 const mongoose = require('mongoose');
@@ -16,8 +16,16 @@ const binSchema = new mongoose.Schema(
     },
     location: {
       type: String,
-      required: [true, 'Bin location is required'],
+      required: [true, 'Bin location address is required'],
       trim: true
+    },
+    latitude: {
+      type: Number,
+      default: -33.8688 // Default Sydney coordinate fallback if omitted
+    },
+    longitude: {
+      type: Number,
+      default: 151.2093
     },
     compartments: {
       dry: {

@@ -1,4 +1,4 @@
-// SmartBin ESP32 IoT Mobile Web Application Frontend Engine
+// SmartBin ESP32 IoT Enterprise Frontend Engine & Task Dispatch System
 
 const app = {
   currentUser: null,
@@ -6,9 +6,13 @@ const app = {
   bins: [],
   alerts: [],
   admins: [],
+  staff: [],
+  tasks: [],
   auditLogs: [],
   socket: null,
   audioCtx: null,
+  map: null,
+  markers: [],
 
   init() {
     this.initSocket();
@@ -45,6 +49,7 @@ const app = {
       if (this.currentUser) {
         this.checkSessionTimeout();
         this.fetchBins();
+        this.fetchStaff();
         if (this.currentUser.role && this.currentUser.role.toLowerCase() === 'superadmin') {
           this.fetchSuperadminData();
         }
@@ -57,12 +62,12 @@ const app = {
     try {
       this.socket = io();
       this.socket.on('connect', () => {
-        console.log('🔌 Connected to Socket.io real-time server with ID:', this.socket.id);
+        console.log('Connected to Socket.io real-time server with ID:', this.socket.id);
       });
 
       // Listen for urgent_bin_full threshold event (Story 8)
       this.socket.on('urgent_bin_full', (data) => {
-        console.log('🚨 URGENT ALARM RECEIVED VIA SOCKET.IO:', data);
+        console.log('URGENT ALARM RECEIVED VIA SOCKET.IO:', data);
         this.triggerUrgentAlertModal(data);
         this.fetchBins();
         this.fetchAlerts();
@@ -134,7 +139,7 @@ const app = {
   onLoginSuccess() {
     const isSuperadmin = this.currentUser.role && this.currentUser.role.toLowerCase() === 'superadmin';
     const badge = document.getElementById('user-role-badge');
-    badge.innerText = isSuperadmin ? '👑 Superadmin' : '🛡️ Admin';
+    badge.innerText = isSuperadmin ? 'SUPERADMIN' : 'ADMIN';
     badge.className = `user-role-badge ${isSuperadmin ? 'superadmin' : 'admin'}`;
 
     // Role Scoping (Stories 10, 15, 17): Hide Superadmin sections from standard Admins
@@ -185,7 +190,9 @@ const app = {
     const breadcrumbMap = {
       home: 'Home Dashboard',
       bins: 'Live Smart Bins & Capacity Levels',
-      alerts: 'Hardware Overflow Alert History',
+      map: 'Google Map View & Geolocation Pins',
+      alerts: 'Hardware Overflow Alerts & Task Assignments',
+      staff: 'Waste Collection Staff Management',
       'admin-management': 'Superadmin Admin Management',
       'bin-registration': 'Register New Smart Bin',
       simulator: 'ESP32 Telemetry Simulator'
@@ -201,16 +208,24 @@ const app = {
 
     // Refresh tab data
     if (tabId === 'bins' || tabId === 'home') this.fetchBins();
+    if (tabId === 'map') this.renderGoogleMap();
     if (tabId === 'alerts') this.fetchAlerts();
+    if (tabId === 'staff') this.fetchStaff();
     if (tabId === 'admin-management' && isSuperadmin) this.fetchSuperadminData();
   },
 
   refreshAll() {
     this.fetchBins();
     this.fetchAlerts();
+    this.fetchStaff();
     if (this.currentUser && this.currentUser.role && this.currentUser.role.toLowerCase() === 'superadmin') {
       this.fetchSuperadminData();
     }
+  },
+
+  downloadPdfReport() {
+    // Download PDF Report (Story 22)
+    window.open('/api/reports/pdf', '_blank');
   },
 
   async fetchBins() {
@@ -220,6 +235,7 @@ const app = {
         this.bins = await res.json();
         this.renderBins();
         this.updateHomeStats();
+        if (this.activeTab === 'map') this.renderGoogleMap();
       }
     } catch (err) {
       console.warn('Error fetching bins:', err);
@@ -229,8 +245,10 @@ const app = {
   updateHomeStats() {
     const totalBinsEl = document.getElementById('stat-total-bins');
     const urgentBinsEl = document.getElementById('stat-urgent-bins');
+    const totalStaffEl = document.getElementById('stat-total-staff');
 
     if (totalBinsEl) totalBinsEl.innerText = this.bins.length;
+    if (totalStaffEl) totalStaffEl.innerText = this.staff.length;
 
     let urgentCount = 0;
     this.bins.forEach(b => {
@@ -248,7 +266,7 @@ const app = {
     if (!container) return;
 
     if (!this.bins || this.bins.length === 0) {
-      container.innerHTML = `<div class="card" style="text-align: center; color: var(--text-muted); grid-column: 1/-1;">No smart bins active in system database.</div>`;
+      container.innerHTML = `<div class="card" style="text-align: center; color: var(--text-muted); grid-column: 1/-1;">No smart bins active in database.</div>`;
       return;
     }
 
@@ -266,10 +284,10 @@ const app = {
           <div class="bin-card-header">
             <div>
               <div class="bin-id">${bin.binId}</div>
-              <div class="bin-address">📍 ${bin.location}</div>
+              <div class="bin-address">Address: ${bin.location}</div>
             </div>
             ${isUrgent 
-              ? `<span class="user-role-badge" style="background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border);">🚨 80%+ URGENT</span>`
+              ? `<span class="user-role-badge" style="background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border);">80%+ OVERFLOW</span>`
               : `<span class="user-role-badge" style="background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border);">NORMAL</span>`
             }
           </div>
@@ -308,11 +326,12 @@ const app = {
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted);">
-            <span>🕒 Updated: ${new Date(bin.lastUpdated || bin.updatedAt || Date.now()).toLocaleTimeString()}</span>
+            <span>Updated: ${new Date(bin.lastUpdated || bin.updatedAt || Date.now()).toLocaleTimeString()}</span>
             <div style="display: flex; gap: 6px;">
-              <button class="btn btn-sm btn-outline" onclick="app.emptyBin('${bin.binId}')">🧹 Empty</button>
+              <button class="btn btn-sm btn-primary" onclick="app.openAssignTaskModal('${bin.binId}', 'dry')">Assign Task</button>
+              <button class="btn btn-sm btn-outline" onclick="app.emptyBin('${bin.binId}')">Empty</button>
               ${this.currentUser && this.currentUser.role && this.currentUser.role.toLowerCase() === 'superadmin'
-                ? `<button class="btn btn-sm btn-danger" onclick="app.deleteBin('${bin.binId}')">🗑️ Delete</button>`
+                ? `<button class="btn btn-sm btn-danger" onclick="app.deleteBin('${bin.binId}')">Delete</button>`
                 : ''
               }
             </div>
@@ -322,7 +341,36 @@ const app = {
     }).join('');
   },
 
-  // Trigger Red Urgent Alert Popup Modal (Story 8)
+  // Google Maps Integration (Story 23)
+  renderGoogleMap() {
+    const mapEl = document.getElementById('google-map');
+    if (!mapEl) return;
+
+    // Render interactive HTML/Canvas visual map fallback if Google Maps API key is pending
+    mapEl.innerHTML = `
+      <div style="padding: 20px; text-align: center; background: #fafafa; border-radius: 8px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <h4 style="font-weight: 800; font-size: 16px; margin-bottom: 8px;">GPS GEOLOCATION MAP PINS</h4>
+        <p style="font-size: 12px; color: var(--text-muted); max-width: 450px; margin-bottom: 16px;">
+          Bins rendered using manual latitude & longitude coordinates. Bins at 80%+ capacity display high-priority Orange alert markers.
+        </p>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%;">
+          ${this.bins.map(b => {
+            const isUrgent = (b.compartments?.dry >= 80 || b.compartments?.wet >= 80 || b.compartments?.metal >= 80);
+            return `
+              <div style="padding: 12px 16px; background: #ffffff; border: 2px solid ${isUrgent ? 'var(--warning)' : '#d1d5db'}; border-radius: 6px; text-align: left; min-width: 220px;">
+                <div style="font-weight: 800; font-size: 14px;">${b.binId} ${isUrgent ? '<span style="color: var(--warning); font-size: 10px; font-weight: 800;">[ORANGE ALERT MARKER]</span>' : ''}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">${b.location}</div>
+                <div style="font-size: 10px; color: #6b7280; margin-top: 4px;">Lat: ${b.latitude || -33.8688}, Lng: ${b.longitude || 151.2093}</div>
+                <button class="btn btn-sm btn-primary" style="margin-top: 8px; width: 100%;" onclick="app.openAssignTaskModal('${b.binId}', 'dry')">Assign Task</button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  },
+
+  // Trigger Red 100% Urgent Alert Popup Modal (Story 8, 21)
   triggerUrgentAlertModal(data) {
     document.getElementById('urgent-modal-location').innerText = data.location || 'Unknown Location';
     document.getElementById('urgent-modal-bin-id').innerText = data.binId || 'BIN';
@@ -330,12 +378,88 @@ const app = {
     document.getElementById('urgent-modal-level').innerText = (data.fillLevel || 80) + '%';
     document.getElementById('urgent-modal-time').innerText = new Date(data.timestamp || Date.now()).toLocaleTimeString();
 
+    // Store data on popup modal button
+    const assignBtn = document.getElementById('btn-modal-assign-task');
+    if (assignBtn) {
+      assignBtn.setAttribute('data-bin-id', data.binId);
+      assignBtn.setAttribute('data-compartment', data.compartment);
+      assignBtn.setAttribute('data-alert-id', data.alertId || '');
+    }
+
     document.getElementById('urgent-alert-modal').classList.add('open');
     this.playAlarmSound();
   },
 
   closeUrgentModal() {
     document.getElementById('urgent-alert-modal').classList.remove('open');
+  },
+
+  openAssignTaskModalFromUrgent() {
+    const assignBtn = document.getElementById('btn-modal-assign-task');
+    const binId = assignBtn.getAttribute('data-bin-id');
+    const compartment = assignBtn.getAttribute('data-compartment');
+    const alertId = assignBtn.getAttribute('data-alert-id');
+    this.closeUrgentModal();
+    this.openAssignTaskModal(binId, compartment, alertId);
+  },
+
+  // Open Task Assignment Modal (Stories 19, 20, 21)
+  async openAssignTaskModal(binId, compartment, alertId = '') {
+    document.getElementById('assign-target-bin-id').value = binId;
+    document.getElementById('assign-target-compartment').value = compartment;
+    document.getElementById('assign-target-alert-id').value = alertId;
+    document.getElementById('assign-target-details').value = `Bin ${binId} (${(compartment || 'DRY').toUpperCase()} compartment)`;
+
+    // Populate staff dropdown
+    const select = document.getElementById('assign-staff-select');
+    select.innerHTML = '<option value="">-- Select Staff Member --</option>';
+
+    await this.fetchStaff();
+
+    if (this.staff.length === 0) {
+      select.innerHTML += '<option value="" disabled>No staff members registered. Please register staff in Staff Management tab.</option>';
+    } else {
+      this.staff.forEach(s => {
+        select.innerHTML += `<option value="${s._id}">${s.fullName} (${s.phone}) - ${s.status}</option>`;
+      });
+    }
+
+    document.getElementById('assign-task-modal').classList.add('open');
+  },
+
+  // Execute Task Assignment & Dispatch SMS (Stories 19, 20, 21)
+  async executeAssignTask(e) {
+    e.preventDefault();
+    const staffId = document.getElementById('assign-staff-select').value;
+    const binId = document.getElementById('assign-target-bin-id').value;
+    const compartment = document.getElementById('assign-target-compartment').value;
+    const alertId = document.getElementById('assign-target-alert-id').value;
+
+    if (!staffId) {
+      alert('Please select a staff member to assign.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/tasks/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, binId, compartment, alertId })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(`${data.message} (SMS Status: ${data.smsStatus})`);
+        document.getElementById('assign-task-modal').classList.remove('open');
+        this.fetchBins();
+        this.fetchAlerts();
+        this.fetchStaff();
+      } else {
+        alert(data.error || 'Failed to assign task');
+      }
+    } catch (err) {
+      alert('Error connecting to task assignment server');
+    }
   },
 
   playAlarmSound() {
@@ -355,6 +479,71 @@ const app = {
       osc.start();
       osc.stop(this.audioCtx.currentTime + 0.4);
     } catch (e) {}
+  },
+
+  // STAFF MANAGEMENT (Story 18)
+  async fetchStaff() {
+    try {
+      const res = await fetch('/api/staff');
+      if (res.ok) {
+        this.staff = await res.json();
+        this.renderStaffTable();
+        this.updateHomeStats();
+      }
+    } catch (err) {
+      console.warn('Error fetching staff:', err);
+    }
+  },
+
+  async handleRegisterStaff(e) {
+    e.preventDefault();
+    const firstName = document.getElementById('staff-first-name').value.trim();
+    const lastName = document.getElementById('staff-last-name').value.trim();
+    const phone = document.getElementById('staff-phone').value.trim();
+
+    try {
+      const res = await fetch('/api/staff/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName, lastName, phone })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'Staff Member Registered Successfully');
+        document.getElementById('staff-first-name').value = '';
+        document.getElementById('staff-last-name').value = '';
+        document.getElementById('staff-phone').value = '';
+        this.fetchStaff();
+      } else {
+        alert(data.error || 'Failed to register staff member');
+      }
+    } catch (err) {
+      alert('Error registering staff member');
+    }
+  },
+
+  renderStaffTable() {
+    const tbody = document.getElementById('staff-table-body');
+    if (!tbody) return;
+
+    if (!this.staff || this.staff.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No staff members registered in database.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = this.staff.map(s => `
+      <tr>
+        <td><strong>${s.fullName || s.firstName + ' ' + s.lastName}</strong></td>
+        <td><code>${s.phone}</code></td>
+        <td><span class="user-role-badge admin">Staff</span></td>
+        <td>
+          <span class="user-role-badge" style="background: ${s.status === 'ASSIGNED' ? 'var(--warning-bg)' : 'var(--success-bg)'}; color: ${s.status === 'ASSIGNED' ? 'var(--warning)' : 'var(--success)'};">
+            ${s.status}
+          </span>
+        </td>
+      </tr>
+    `).join('');
   },
 
   // SUPERADMIN: Create New Admin (Story 2)
@@ -428,11 +617,11 @@ const app = {
         </td>
         <td>
           <div style="display: flex; gap: 6px;">
-            <button class="btn btn-sm btn-outline" onclick="app.openResetModal('${admin._id}', '${admin.username}')">🔑 Password</button>
+            <button class="btn btn-sm btn-outline" onclick="app.openResetModal('${admin._id}', '${admin.username}')">Reset Password</button>
             <button class="btn btn-sm ${admin.isSuspended ? 'btn-success' : 'btn-warning'}" onclick="app.toggleSuspendAdmin('${admin._id}', '${admin.username}', ${admin.isSuspended})">
               ${admin.isSuspended ? 'Reactivate' : 'Suspend'}
             </button>
-            <button class="btn btn-sm btn-danger" onclick="app.deleteAdmin('${admin._id}', '${admin.username}')">🗑️ Delete</button>
+            <button class="btn btn-sm btn-danger" onclick="app.deleteAdmin('${admin._id}', '${admin.username}')">Delete</button>
           </div>
         </td>
       </tr>
@@ -507,7 +696,7 @@ const app = {
   },
 
   async deleteAdmin(userId, username) {
-    const confirmAction = confirm(`⚠️ PERMANENT ACTION: Are you sure you want to DELETE admin '@${username}'? This cannot be undone.`);
+    const confirmAction = confirm(`PERMANENT ACTION: Are you sure you want to DELETE admin '@${username}'? This cannot be undone.`);
     if (!confirmAction) return;
 
     try {
@@ -522,11 +711,13 @@ const app = {
     }
   },
 
-  // SUPERADMIN: Register New Bin (Story 4)
+  // SUPERADMIN: Register New Bin (Story 4, 23)
   async handleRegisterBin(e) {
     e.preventDefault();
     const binId = document.getElementById('reg-bin-id').value.trim();
     const location = document.getElementById('reg-bin-location').value.trim();
+    const latitude = document.getElementById('reg-bin-lat').value;
+    const longitude = document.getElementById('reg-bin-lng').value;
     const dry = document.getElementById('reg-bin-dry').value;
     const wet = document.getElementById('reg-bin-wet').value;
     const metal = document.getElementById('reg-bin-metal').value;
@@ -535,7 +726,7 @@ const app = {
       const res = await fetch('/api/bins/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ binId, location, dry, wet, metal })
+        body: JSON.stringify({ binId, location, latitude, longitude, dry, wet, metal })
       });
       const data = await res.json();
       if (res.ok) {
@@ -580,18 +771,24 @@ const app = {
         <td><strong style="text-transform: uppercase;">${alt.compartment}</strong></td>
         <td><span style="color: var(--danger); font-weight: 700;">${alt.fillLevel}%</span></td>
         <td>
-          ${alt.status === 'UNRESOLVED' 
-            ? `<span class="user-role-badge" style="background: var(--danger-bg); color: var(--danger);">UNRESOLVED</span>`
+          ${alt.isAssigned
+            ? `<span class="user-role-badge" style="background: var(--primary-light); color: var(--primary);">ASSIGNED: ${alt.assignedStaffName}</span>`
             : (alt.status === 'ACKNOWLEDGED'
                 ? `<span class="user-role-badge" style="background: var(--warning-bg); color: var(--warning);">ACKNOWLEDGED</span>`
-                : `<span class="user-role-badge" style="background: var(--success-bg); color: var(--success);">RESOLVED</span>`)
+                : `<span class="user-role-badge" style="background: var(--danger-bg); color: var(--danger);">UNRESOLVED</span>`)
           }
         </td>
         <td>
-          ${alt.status === 'UNRESOLVED' 
-            ? `<button class="btn btn-sm btn-outline" onclick="app.acknowledgeAlert('${alt._id}')">✓ Acknowledge</button>`
-            : `<span>—</span>`
-          }
+          <div style="display: flex; gap: 6px;">
+            ${!alt.isAssigned 
+              ? `<button class="btn btn-sm btn-primary" onclick="app.openAssignTaskModal('${alt.binId}', '${alt.compartment}', '${alt._id}')">Assign Task</button>`
+              : `<button class="btn btn-sm btn-outline" disabled>Assigned</button>`
+            }
+            ${alt.status === 'UNRESOLVED' && !alt.isAssigned
+              ? `<button class="btn btn-sm btn-outline" onclick="app.acknowledgeAlert('${alt._id}')">Acknowledge</button>`
+              : ''
+            }
+          </div>
         </td>
       </tr>
     `).join('');
@@ -626,7 +823,7 @@ const app = {
   },
 
   async deleteBin(binId) {
-    const confirmAction = confirm(`⚠️ Are you sure you want to DELETE bin '${binId}' from the database?`);
+    const confirmAction = confirm(`Are you sure you want to DELETE bin '${binId}' from the database?`);
     if (!confirmAction) return;
 
     try {

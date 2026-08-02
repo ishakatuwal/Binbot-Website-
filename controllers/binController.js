@@ -30,6 +30,8 @@ exports.registerBin = async (req, res) => {
     const newBin = await Bin.create({
       binId: formattedBinId,
       location: binLocation,
+      latitude: req.body.latitude ? Number(req.body.latitude) : -33.8688,
+      longitude: req.body.longitude ? Number(req.body.longitude) : 151.2093,
       compartments: {
         dry: dry !== undefined ? Number(dry) : 0,
         wet: wet !== undefined ? Number(wet) : 0,
