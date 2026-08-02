@@ -1,31 +1,37 @@
 /**
  * backend/controllers/binController.js
- * 
- * Purpose: Handles Bin Registration, Fetching, and ESP32 Telemetry Webhooks.
- * Hardware Rule: ESP32 only triggers when a bin compartment reaches 80% filled.
- * Emits real-time Socket.io urgent_bin_full alert upon reaching 80%+ capacity.
+ * Smart Bin Management & Real-Time ESP32 Telemetry Handler.
+ * Emits 80%+ hardware threshold alerts (Dry, Wet, Metal), logs to Alert collection, and throttles notifications.
  */
 
 const Bin = require('../models/Bin');
+const Alert = require('../models/Alert');
+const AuditLog = require('../models/AuditLog');
 const { getIO } = require('../socket');
 
-// 1. Superadmin Registers New Bin
+// 1. Superadmin Registers New Bin (Story 4)
 exports.registerBin = async (req, res) => {
   try {
-    const { binId, location, dry, wet, metal } = req.body;
+    const { binId, location, address, dry, wet, metal } = req.body;
+    const binLocation = location || address;
 
-    if (!binId || !location) {
-      return res.status(400).json({ error: 'binId and location are required' });
+    if (!binId || !binLocation) {
+      return res.status(400).json({ error: 'Bin ID and Location address are required' });
     }
 
-    const existingBin = await Bin.findOne({ binId: binId.toUpperCase() });
+    const formattedBinId = binId.trim().toUpperCase();
+
+    // Check duplicate Bin ID (Story 4)
+    const existingBin = await Bin.findOne({ binId: formattedBinId });
     if (existingBin) {
-      return res.status(400).json({ error: `Bin with ID '${binId}' already exists` });
+      return res.status(400).json({ error: `Bin ID '${formattedBinId}' already exists in database` });
     }
 
     const newBin = await Bin.create({
-      binId: binId.toUpperCase(),
-      location: location,
+      binId: formattedBinId,
+      location: binLocation,
+      latitude: req.body.latitude ? Number(req.body.latitude) : -33.8688,
+      longitude: req.body.longitude ? Number(req.body.longitude) : 151.2093,
       compartments: {
         dry: dry !== undefined ? Number(dry) : 0,
         wet: wet !== undefined ? Number(wet) : 0,
@@ -33,8 +39,15 @@ exports.registerBin = async (req, res) => {
       }
     });
 
+    await AuditLog.create({
+      action: 'REGISTER_BIN',
+      performedBy: 'superadmin',
+      targetItem: formattedBinId,
+      details: `Registered new bin ${formattedBinId} at address: ${binLocation}`
+    });
+
     res.status(201).json({
-      message: 'New Smart Bin registered successfully in database',
+      message: 'Bin Registered Successfully',
       bin: newBin
     });
   } catch (error) {
@@ -42,7 +55,7 @@ exports.registerBin = async (req, res) => {
   }
 };
 
-// 2. Get All Bins Data
+// 2. Get All Bins Data (Story 14)
 exports.getAllBins = async (req, res) => {
   try {
     const bins = await Bin.find().sort({ updatedAt: -1 });
@@ -52,23 +65,21 @@ exports.getAllBins = async (req, res) => {
   }
 };
 
-// 3. ESP32 Hardware Webhook Endpoint (/api/bins/esp32-update)
-// Hardware Rule: ESP32 triggers when fill level reaches 80% full
+// 3. ESP32 Hardware Webhook Endpoint (Story 1, 5, 6, 8, 14, 16)
 exports.updateBinFromESP32 = async (req, res) => {
   try {
-    const { binId, dry, wet, metal } = req.body;
+    const { binId, bin_id, dry, wet, metal, fill_level } = req.body;
+    const targetBinId = (binId || bin_id || '').trim().toUpperCase();
 
-    if (!binId) {
-      return res.status(400).json({ error: 'binId is required in ESP32 payload' });
+    if (!targetBinId) {
+      return res.status(400).json({ error: 'binId is required in payload' });
     }
 
-    // Find bin or register if new ESP32 connects
-    let bin = await Bin.findOne({ binId: binId.toUpperCase() });
-
+    let bin = await Bin.findOne({ binId: targetBinId });
     if (!bin) {
       bin = new Bin({
-        binId: binId.toUpperCase(),
-        location: 'Field Sector ESP32 Node',
+        binId: targetBinId,
+        location: 'Field Sector Node',
         compartments: { dry: 0, wet: 0, metal: 0 }
       });
     }
@@ -78,45 +89,152 @@ exports.updateBinFromESP32 = async (req, res) => {
     if (wet !== undefined) bin.compartments.wet = Number(wet);
     if (metal !== undefined) bin.compartments.metal = Number(metal);
 
+    // Fallback if legacy single fill_level payload is sent
+    if (fill_level !== undefined && dry === undefined && wet === undefined && metal === undefined) {
+      bin.compartments.dry = Number(fill_level);
+    }
+
     bin.lastUpdated = new Date();
     await bin.save();
 
-    // Hardware Rule: Check if any compartment reaches 80% filled threshold
-    const triggeredCompartments = [];
-    const compartmentsList = ['dry', 'wet', 'metal'];
+    const triggeredAlerts = [];
+    const compartments = ['dry', 'wet', 'metal'];
 
-    compartmentsList.forEach((comp) => {
-      if (bin.compartments[comp] >= 80) {
-        triggeredCompartments.push(comp);
+    for (const comp of compartments) {
+      const fillPercentage = bin.compartments[comp];
 
-        // Emit Socket.io event: urgent_bin_full
+      // Hardware Rule: Trigger alert when fill level >= 80% (Story 1, 5, 6, 8, 16)
+      if (fillPercentage >= 80) {
+        triggeredAlerts.push(comp);
+
+        const alertMessage = `Urgent Bin is filled and needs to be collected (${comp.toUpperCase()} compartment: ${fillPercentage}% Full)`;
+
+        // Save persistent alert to MongoDB (Story 5, 6, 16)
+        const newAlert = await Alert.create({
+          binId: bin.binId,
+          location: bin.location,
+          compartment: comp,
+          fillLevel: fillPercentage,
+          threshold: '80%',
+          status: 'UNRESOLVED',
+          message: alertMessage
+        });
+
+        // Emit Socket.io real-time alert (Story 8, 14, 16)
         try {
           const io = getIO();
           const alertPayload = {
+            alertId: newAlert._id,
             binId: bin.binId,
             location: bin.location,
             compartment: comp,
-            fillLevel: bin.compartments[comp],
+            fillLevel: fillPercentage,
             threshold: '80%',
-            timestamp: new Date().toISOString()
+            message: 'Urgent Bin is filled and needs to be collected',
+            timestamp: newAlert.createdAt
           };
 
           io.emit('urgent_bin_full', alertPayload);
-          console.log(`🚨 80% HARDWARE ALERT EMITTED [urgent_bin_full]:`, alertPayload);
+          console.log(`🚨 RED ALERT EMITTED [urgent_bin_full]:`, alertPayload);
         } catch (socketErr) {
-          console.error('Socket.io alert error:', socketErr.message);
+          console.error('Socket alert error:', socketErr.message);
         }
       }
-    });
+    }
 
     res.json({
       success: true,
-      message: triggeredCompartments.length > 0
-        ? `🚨 80% HARDWARE TRIGGER ALERT: Compartment(s) [${triggeredCompartments.join(', ')}] reached 80%+ filled capacity!`
-        : `ESP32 Telemetry recorded successfully.`,
-      bin: bin,
-      alertsTriggered: triggeredCompartments
+      message: triggeredAlerts.length > 0
+        ? `🚨 Urgent Bin is filled and needs to be collected (${triggeredAlerts.join(', ').toUpperCase()} compartment >= 80%)`
+        : `Telemetry recorded successfully.`,
+      bin,
+      triggeredAlerts
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 4. Get Historical Alerts (Story 5, 6, 7, 16)
+exports.getAlerts = async (req, res) => {
+  try {
+    const alerts = await Alert.find().sort({ createdAt: -1 }).limit(100);
+    res.json(alerts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 5. Acknowledge Alert (Story 5, 6, 7)
+exports.acknowledgeAlert = async (req, res) => {
+  try {
+    const { alertId } = req.params;
+    const { operatorName } = req.body;
+
+    const alert = await Alert.findById(alertId);
+    if (!alert) {
+      return res.status(404).json({ error: 'Alert record not found' });
+    }
+
+    alert.status = 'ACKNOWLEDGED';
+    alert.acknowledgedBy = operatorName || 'Operator';
+    await alert.save();
+
+    res.json({ message: `Alert acknowledged by ${alert.acknowledgedBy}`, alert });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 6. Empty Smart Bin (Resets fill level to 0% and resolves alerts) (Story 1, 7)
+exports.emptyBin = async (req, res) => {
+  try {
+    const { binId } = req.params;
+    const formattedBinId = binId.trim().toUpperCase();
+
+    const bin = await Bin.findOne({ binId: formattedBinId });
+    if (!bin) {
+      return res.status(404).json({ error: 'Bin not found' });
+    }
+
+    bin.compartments.dry = 0;
+    bin.compartments.wet = 0;
+    bin.compartments.metal = 0;
+    bin.lastUpdated = new Date();
+    await bin.save();
+
+    // Mark all unresolved/acknowledged alerts for this bin as RESOLVED in MongoDB
+    await Alert.updateMany(
+      { binId: formattedBinId, status: { $ne: 'RESOLVED' } },
+      { $set: { status: 'RESOLVED' } }
+    );
+
+    res.json({ message: `Bin ${formattedBinId} emptied successfully. Alert status cleared.`, bin });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 7. Delete Bin Permanently (Superadmin Action)
+exports.deleteBin = async (req, res) => {
+  try {
+    const { binId } = req.params;
+    const formattedBinId = binId.trim().toUpperCase();
+
+    const bin = await Bin.findOneAndDelete({ binId: formattedBinId });
+    if (!bin) {
+      return res.status(404).json({ error: 'Bin not found' });
+    }
+
+    await Alert.deleteMany({ binId: formattedBinId });
+    await AuditLog.create({
+      action: 'DELETE_BIN',
+      performedBy: 'superadmin',
+      targetItem: formattedBinId,
+      details: `Deleted bin ${formattedBinId} from system`
+    });
+
+    res.json({ message: `Bin '${formattedBinId}' deleted permanently from database.` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

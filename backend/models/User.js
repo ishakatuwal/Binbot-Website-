@@ -1,12 +1,25 @@
 /**
  * backend/models/User.js
- * User Schema with roles: "Superadmin" and "Admin" and status ("pending_approval", "approved", "rejected").
+ * User Schema supporting Superadmin, Admin, and Staff roles with bcrypt encryption.
  */
 
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema(
   {
+    firstName: {
+      type: String,
+      trim: true
+    },
+    lastName: {
+      type: String,
+      trim: true
+    },
+    fullName: {
+      type: String,
+      trim: true
+    },
     username: {
       type: String,
       required: [true, 'Username is required'],
@@ -29,8 +42,8 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: {
-        values: ['Superadmin', 'Admin'],
-        message: 'Role must be either Superadmin or Admin'
+        values: ['Superadmin', 'Admin', 'Staff'],
+        message: 'Role must be Superadmin, Admin, or Staff'
       },
       default: 'Admin',
       required: true
@@ -38,16 +51,34 @@ const userSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: ['pending_approval', 'approved', 'rejected'],
-      default: 'pending_approval'
+      default: 'approved'
     },
-    fullName: {
-      type: String,
-      trim: true
+    isSuspended: {
+      type: Boolean,
+      default: false
     }
   },
   {
     timestamps: true
   }
 );
+
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (this.password && !this.password.startsWith('$2a$') && !this.password.startsWith('$2b$')) {
+    return candidatePassword === this.password;
+  }
+  return await bcrypt.compare(candidatePassword, this.password);
+};
 
 module.exports = mongoose.model('User', userSchema);

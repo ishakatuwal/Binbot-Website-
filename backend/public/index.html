@@ -3,302 +3,531 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SmartBin ESP32 IoT - Mobile Monitoring & 82% Alert System</title>
+  <title>Smart Waste Management System - Corporate Operator Portal</title>
   <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
-  <!-- Main Container -->
-  <div class="app-container">
+  <div class="app-layout">
 
-    <!-- Top Header -->
-    <header class="app-header">
-      <div class="brand">
-        <span class="brand-icon">🗑️</span>
-        <div>
-          <h1 class="brand-title">SmartBin IoT</h1>
-          <span style="font-size: 10px; color: var(--text-muted);">ESP32 Real-Time Monitoring</span>
+    <!-- PERSISTENT COLLAPSIBLE SIDEBAR (Stories 9, 10, 17) -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <a href="#" class="sidebar-brand" onclick="app.switchTab('home')">
+          <span class="sidebar-brand-text">SMARTBIN</span>
+          <span class="brand-tag">CORPORATE</span>
+        </a>
+        <button class="btn-toggle-sidebar" onclick="app.toggleSidebar()" title="Toggle Sidebar">
+          <span>|&lt;</span>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-title">Navigation</div>
+        
+        <div id="nav-link-home" class="nav-link active" onclick="app.switchTab('home')">
+          <span class="nav-text">Home</span>
         </div>
-      </div>
 
-      <div class="user-badge-container">
-        <div id="user-role-badge" class="role-tag admin">Admin</div>
-        <button id="btn-logout" class="btn-icon-logout" title="Logout">
-          <span>🚪</span>
-        </button>
-      </div>
-    </header>
+        <div id="nav-link-bins" class="nav-link" onclick="app.switchTab('bins')">
+          <span class="nav-text">Live Bins</span>
+        </div>
 
-    <!-- Sticky 82% Threshold Alert Banner -->
-    <div id="alert-banner" class="alert-banner-container">
-      <div class="alert-banner-icon">🔔</div>
-      <div class="alert-banner-text">
-        <div class="alert-banner-title">🚨 URGENT BIN ALERT! (≥ 80% Full Threshold)</div>
-        <div id="alert-banner-detail" class="alert-banner-sub">Smart Bin reached 80%+ filled capacity. Dispatch needed.</div>
-      </div>
-      <button id="btn-banner-action" class="btn btn-sm btn-secondary" onclick="app.switchTab('dashboard')">View</button>
-    </div>
+        <div id="nav-link-map" class="nav-link" onclick="app.switchTab('map')">
+          <span class="nav-text">Google Map View</span>
+        </div>
 
-    <!-- VIEW 1: BIN DASHBOARD (Admin & Superadmin) -->
-    <main id="view-dashboard" class="view-panel active">
-      <div class="section-header">
-        <h2 class="section-title">
-          <span>📊</span> Live Smart Bins
-        </h2>
-        <button class="btn btn-sm btn-outline" onclick="app.fetchBins()">
-          🔄 Refresh
-        </button>
-      </div>
+        <div id="nav-link-alerts" class="nav-link" onclick="app.switchTab('alerts')">
+          <span class="nav-text">Alerts & Tasks</span>
+        </div>
 
-      <!-- Bins List Container -->
-      <div id="bins-container">
-        <!-- Rendered dynamically by JS -->
-      </div>
-    </main>
+        <div id="nav-link-staff" class="nav-link" onclick="app.switchTab('staff')">
+          <span class="nav-text">Staff Management</span>
+        </div>
 
-    <!-- VIEW 2: SUPERADMIN CONTROL PANEL -->
-    <main id="view-superadmin" class="view-panel">
-      <div class="section-header">
-        <h2 class="section-title" style="color: var(--superadmin-gold);">
-          <span>👑</span> Superadmin Governance
-        </h2>
-      </div>
+        <!-- Superadmin Restricted Nav Group (Stories 10, 15, 17) -->
+        <div id="superadmin-nav-group" style="display: none;">
+          <div class="nav-section-title" style="color: var(--superadmin-gold);">Superadmin</div>
 
-      <!-- Superadmin Register New Bin System -->
-      <div class="card" style="border-color: rgba(56, 189, 248, 0.4); margin-bottom: 16px;">
-        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px; color: var(--primary);">
-          ➕ Register New Smart Bin into MongoDB
-        </h3>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-          Add physical smart bin nodes into database to track location and compartment fill levels.
-        </p>
-
-        <form onsubmit="app.handleRegisterBin(event)">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <div class="form-group">
-              <label class="form-label">Bin ID</label>
-              <input type="text" id="new-bin-id" class="form-input" placeholder="e.g. BIN-105" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Location / Sector</label>
-              <input type="text" id="new-bin-location" class="form-input" placeholder="e.g. North Gate Entrance" required>
-            </div>
+          <div id="nav-link-admin-management" class="nav-link" onclick="app.switchTab('admin-management')">
+            <span class="nav-text">Admin Management</span>
           </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 4px;">
-            <div class="form-group">
-              <label class="form-label">Initial Dry (%)</label>
-              <input type="number" id="new-bin-dry" class="form-input" min="0" max="100" value="0">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Initial Wet (%)</label>
-              <input type="number" id="new-bin-wet" class="form-input" min="0" max="100" value="0">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Initial Metal (%)</label>
-              <input type="number" id="new-bin-metal" class="form-input" min="0" max="100" value="0">
-            </div>
+
+          <div id="nav-link-bin-registration" class="nav-link" onclick="app.switchTab('bin-registration')">
+            <span class="nav-text">Register New Bin</span>
           </div>
-          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
-            ➕ Save Bin to MongoDB Database
+        </div>
+
+        <div class="nav-section-title">Developer Tools</div>
+        <div id="nav-link-simulator" class="nav-link" onclick="app.switchTab('simulator')">
+          <span class="nav-text">ESP32 Simulator</span>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- MAIN CONTENT WRAPPER -->
+    <div class="main-wrapper">
+
+      <!-- TOP HEADER (Story 12) -->
+      <header class="top-header">
+        <div class="header-left">
+          <!-- Back to Home Button (Story 12) - hidden on Home view -->
+          <button id="btn-back-home" class="btn-back-home" style="display: none;" onclick="app.switchTab('home')">
+            Back to Home
           </button>
-        </form>
-      </div>
-
-      <!-- Admin Login Approvals Section -->
-      <div class="card" style="border-color: rgba(245, 158, 11, 0.4);">
-        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px; color: var(--superadmin-gold);">
-          ⏳ Pending Admin Approvals
-        </h3>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-          Admins must be approved by Superadmin before gaining dashboard login access.
-        </p>
-        <div id="pending-admins-list">
-          <!-- Pending Admins rendered by JS -->
+          <span id="current-page-breadcrumb" style="font-size: 12px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+            Home Dashboard
+          </span>
         </div>
-      </div>
 
-      <!-- Password Recovery Requests Section -->
-      <div class="card">
-        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px; color: #60a5fa;">
-          🔑 Admin Password Reset Tickets
-        </h3>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-          Password recovery requests submitted by Admins directly route to this Superadmin panel.
-        </p>
-        <div id="password-requests-list">
-          <!-- Reset requests rendered by JS -->
+        <div class="header-right">
+          <div id="user-role-badge" class="user-role-badge admin">ADMIN</div>
+          <button class="btn-logout" onclick="app.logout()">
+            Logout
+          </button>
         </div>
+      </header>
+
+      <!-- PAGE CONTENT CONTAINER -->
+      <main class="page-container">
+
+        <!-- VIEW 1: HOME DASHBOARD -->
+        <section id="view-home" class="view-panel active">
+          <div class="page-title-row">
+            <h1 class="page-title">Waste Management Overview</h1>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-primary" onclick="app.downloadPdfReport()">Download PDF Report</button>
+              <button class="btn btn-outline" onclick="app.refreshAll()">Refresh System</button>
+            </div>
+          </div>
+
+          <!-- Overview Stats Cards -->
+          <div class="stats-grid">
+            <div class="stat-card active-bins">
+              <div class="stat-label">Monitored Smart Bins</div>
+              <div id="stat-total-bins" class="stat-value">0</div>
+            </div>
+            <div class="stat-card urgent">
+              <div class="stat-label">Urgent 80%+ Bins</div>
+              <div id="stat-urgent-bins" class="stat-value">0</div>
+            </div>
+            <div class="stat-card success-stat">
+              <div class="stat-label">Available Staff Members</div>
+              <div id="stat-total-staff" class="stat-value">0</div>
+            </div>
+          </div>
+
+          <!-- Quick Actions & Reporting -->
+          <div class="card">
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Quick Operations & Documentation</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button class="btn btn-outline" onclick="app.switchTab('bins')">View Live Bins</button>
+              <button class="btn btn-outline" onclick="app.switchTab('map')">View Map Pins</button>
+              <button class="btn btn-outline" onclick="app.switchTab('alerts')">View Overflow Alerts</button>
+              <button class="btn btn-outline" onclick="app.switchTab('staff')">Manage Staff</button>
+              <button class="btn btn-primary" onclick="app.downloadPdfReport()">Download PDF Report</button>
+              <button class="btn btn-warning" onclick="window.open('/download-viva-guide', '_blank')">Download Viva Guide</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 2: LIVE BINS LIST -->
+        <section id="view-bins" class="view-panel">
+          <div class="page-title-row">
+            <h1 class="page-title">Live Smart Bins & Capacity Levels</h1>
+            <button class="btn btn-sm btn-outline" onclick="app.fetchBins()">Refresh Bins</button>
+          </div>
+
+          <div id="bins-container" class="bins-grid">
+            <!-- Populated by JS -->
+          </div>
+        </section>
+
+        <!-- VIEW 3: GOOGLE MAP VIEW (Story 23) -->
+        <section id="view-map" class="view-panel">
+          <div class="page-title-row">
+            <h1 class="page-title">Google Maps Geolocation Pins</h1>
+            <button class="btn btn-sm btn-outline" onclick="app.renderGoogleMap()">Refresh Map Pins</button>
+          </div>
+
+          <div class="card">
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Normal bins render standard markers. Bins at 100% capacity render high-priority Orange alert markers. Click markers to assign task.
+            </p>
+            <div id="google-map" class="map-container"></div>
+          </div>
+        </section>
+
+        <!-- VIEW 4: ALERTS & TASK ASSIGNMENT LOG (Stories 1, 5, 6, 7, 19, 20, 21) -->
+        <section id="view-alerts" class="view-panel">
+          <div class="page-title-row">
+            <h1 class="page-title">Hardware Overflow Alerts & Task Assignments</h1>
+            <button class="btn btn-sm btn-outline" onclick="app.fetchAlerts()">Refresh Log</button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Bin ID</th>
+                    <th>Location Address</th>
+                    <th>Category</th>
+                    <th>Fill Percentage</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="alerts-table-body">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 5: STAFF MANAGEMENT (Story 18) -->
+        <section id="view-staff" class="view-panel">
+          <div class="page-title-row">
+            <h1 class="page-title">Waste Collection Staff Management</h1>
+          </div>
+
+          <!-- Register Staff Form (Story 18) -->
+          <div class="card">
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">Register Collection Staff Member</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Register collection operators. Duplicate phone numbers are rejected by system database validation.
+            </p>
+
+            <form onsubmit="app.handleRegisterStaff(event)">
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label class="form-label">First Name</label>
+                  <input type="text" id="staff-first-name" class="form-input" placeholder="e.g. David" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Last Name</label>
+                  <input type="text" id="staff-last-name" class="form-input" placeholder="e.g. Miller" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Phone Number (SMS Dispatch)</label>
+                  <input type="tel" id="staff-phone" class="form-input" placeholder="e.g. +14155552671" required>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                Register Staff Member
+              </button>
+            </form>
+          </div>
+
+          <!-- Staff Directory Table -->
+          <div class="card">
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Registered Collection Staff Directory</h3>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Full Name</th>
+                    <th>Phone Number</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="staff-table-body">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 6: SUPERADMIN ADMIN MANAGEMENT & AUDIT LOGS (Stories 2, 13, 15, 17) -->
+        <section id="view-admin-management" class="view-panel">
+          <div class="page-title-row">
+            <h1 class="page-title" style="color: var(--superadmin-gold);">Superadmin Admin Governance</h1>
+          </div>
+
+          <!-- Add Admin Form (Story 2) -->
+          <div class="card" style="border-color: var(--superadmin-border); background: var(--superadmin-bg);">
+            <h3 style="font-size: 15px; font-weight: 800; color: var(--superadmin-gold); margin-bottom: 6px;">
+              Add New Admin Staff Profile
+            </h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Create staff accounts for City Council operators. Passwords are encrypted automatically using bcrypt.
+            </p>
+
+            <form id="form-add-admin" onsubmit="app.handleCreateAdmin(event)">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label class="form-label">First Name</label>
+                  <input type="text" id="admin-first-name" class="form-input" placeholder="e.g. John" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Last Name</label>
+                  <input type="text" id="admin-last-name" class="form-input" placeholder="e.g. Doe" required>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label class="form-label">Email Address</label>
+                  <input type="email" id="admin-email" class="form-input" placeholder="e.g. john@citycouncil.gov" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Password</label>
+                  <input type="password" id="admin-password" class="form-input" placeholder="Min 6 characters" minlength="6" required>
+                  <div class="form-hint">Password Criteria: Minimum 6 characters</div>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                Create Admin Profile
+              </button>
+            </form>
+          </div>
+
+          <!-- Admin Directory (Story 15) -->
+          <div class="card">
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Active Admin Directory</h3>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Username</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admins-table-body">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- System Audit Log (Story 15) -->
+          <div class="card">
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">System Governance Audit Log</h3>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Action</th>
+                    <th>Target Item</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-logs-table-body">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 7: BIN REGISTRATION (Story 4, 23) -->
+        <section id="view-bin-registration" class="view-panel">
+          <div class="page-title-row">
+            <h1 class="page-title">Register New Smart Bin</h1>
+          </div>
+
+          <div class="card" style="max-width: 600px;">
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">Bin Metadata & Map Coordinates</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+              Input unique Bin ID, geographical address, and latitude/longitude coordinates for Google Maps marker placement.
+            </p>
+
+            <form onsubmit="app.handleRegisterBin(event)">
+              <div class="form-group">
+                <label class="form-label">Unique Bin ID</label>
+                <input type="text" id="reg-bin-id" class="form-input" placeholder="e.g. BIN-201" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Geographical Address</label>
+                <input type="text" id="reg-bin-location" class="form-input" placeholder="e.g. 104 Main Street Market Plaza" required>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label class="form-label">Latitude Coordinate</label>
+                  <input type="number" step="any" id="reg-bin-lat" class="form-input" placeholder="e.g. -33.8688" value="-33.8688" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Longitude Coordinate</label>
+                  <input type="number" step="any" id="reg-bin-lng" class="form-input" placeholder="e.g. 151.2093" value="151.2093" required>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                <div class="form-group">
+                  <label class="form-label">Dry Waste (%)</label>
+                  <input type="number" id="reg-bin-dry" class="form-input" min="0" max="100" value="0">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Wet Waste (%)</label>
+                  <input type="number" id="reg-bin-wet" class="form-input" min="0" max="100" value="0">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Metal Waste (%)</label>
+                  <input type="number" id="reg-bin-metal" class="form-input" min="0" max="100" value="0">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-success" style="width: 100%; margin-top: 10px;">
+                Save Bin to Database
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- VIEW 8: ESP32 SIMULATOR (Story 14) -->
+        <section id="view-simulator" class="view-panel">
+          <div class="page-title-row">
+            <h1 class="page-title">ESP32 Hardware Telemetry Simulator</h1>
+          </div>
+
+          <div class="card" style="max-width: 600px;">
+            <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">Test Telemetry Sensor Payload</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+              Send hardware telemetry payloads. Set any compartment to 100% to trigger the red alert popup instantly.
+            </p>
+
+            <div class="form-group">
+              <label class="form-label">Target Bin ID</label>
+              <input type="text" id="sim-bin-id" class="form-input" value="BIN-101">
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label">Dry Waste (%)</label>
+                <input type="number" id="sim-dry" class="form-input" min="0" max="100" value="100">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Wet Waste (%)</label>
+                <input type="number" id="sim-wet" class="form-input" min="0" max="100" value="30">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Metal Waste (%)</label>
+                <input type="number" id="sim-metal" class="form-input" min="0" max="100" value="15">
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="app.sendSimulatedTelemetry()">
+              Send Telemetry Payload (POST /api/bins/esp32-update)
+            </button>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- RED 100% URGENT ALERT POPUP MODAL (Story 8, 21) -->
+  <div id="urgent-alert-modal" class="urgent-modal-overlay">
+    <div class="urgent-modal-content">
+      <div class="urgent-modal-title">
+        URGENT OVERFLOW ALERT
       </div>
 
-      <!-- Active Approved Admins Directory -->
-      <div class="card">
-        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">
-          👥 Active Admin Directory
-        </h3>
-        <div id="approved-admins-list">
-          <!-- Approved Admins rendered by JS -->
-        </div>
+      <div class="urgent-text-red">
+        Urgent Bin is filled and needs to be collected
       </div>
-    </main>
 
-    <!-- VIEW 3: ALERTS LOG -->
-    <main id="view-alerts" class="view-panel">
-      <div class="section-header">
-        <h2 class="section-title">
-          <span>🚨</span> 82% Alert Logs & History
-        </h2>
-        <button class="btn btn-sm btn-outline" onclick="app.fetchAlerts()">
-          🔄 Refresh Log
+      <div class="urgent-details-box">
+        <div><strong>Location Address:</strong> <span id="urgent-modal-location">Central Plaza</span></div>
+        <div><strong>Bin ID:</strong> <code id="urgent-modal-bin-id">BIN-101</code></div>
+        <div><strong>Compartment:</strong> <strong id="urgent-modal-compartment" style="text-transform: uppercase;">DRY</strong></div>
+        <div><strong>Fill Level:</strong> <span id="urgent-modal-level" style="font-weight: 800;">100%</span></div>
+        <div><strong>Timestamp:</strong> <span id="urgent-modal-time">12:00 PM</span></div>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button id="btn-modal-assign-task" class="btn btn-primary" style="flex: 1;" onclick="app.openAssignTaskModalFromUrgent()">
+          Assign Task
+        </button>
+        <button class="btn btn-danger" style="flex: 1;" onclick="app.closeUrgentModal()">
+          Dismiss Alert
         </button>
       </div>
+    </div>
+  </div>
 
-      <div id="alerts-container">
-        <!-- Rendered dynamically by JS -->
-      </div>
-    </main>
-
-    <!-- VIEW 4: ESP32 SIMULATOR & HARDWARE GUIDE -->
-    <main id="view-simulator" class="view-panel">
-      <div class="section-header">
-        <h2 class="section-title">
-          <span>⚡</span> ESP32 Hardware Simulator & API
-        </h2>
-      </div>
-
-      <!-- Interactive Hardware Simulator Card -->
-      <div class="card">
-        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">
-          🎛️ Live ESP32 Sensor Telemetry Simulator
-        </h3>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
-          Simulate real ultrasonic distance sensor data sent from ESP32 to test the 82% alert threshold engine instantly.
-        </p>
+  <!-- ASSIGN TASK MODAL (Stories 19, 20, 21) -->
+  <div id="assign-task-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 12px;">Assign Waste Collection Task</h3>
+      <form onsubmit="app.executeAssignTask(event)">
+        <input type="hidden" id="assign-target-bin-id">
+        <input type="hidden" id="assign-target-compartment">
+        <input type="hidden" id="assign-target-alert-id">
 
         <div class="form-group">
-          <label class="form-label">Select Target Smart Bin</label>
-          <select id="sim-bin-select" class="form-input">
-            <option value="BIN-01">BIN-01 - Central Park North</option>
-            <option value="BIN-02">BIN-02 - Market Street Hub</option>
-            <option value="BIN-03">BIN-03 - University Library</option>
-            <option value="BIN-04">BIN-04 - Metro Station West</option>
+          <label class="form-label">Target Bin & Compartment</label>
+          <input type="text" id="assign-target-details" class="form-input" readonly>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Select Registered Collection Staff</label>
+          <select id="assign-staff-select" class="form-input" required>
+            <option value="">-- Select Staff Member --</option>
           </select>
         </div>
 
-        <div class="form-group">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <label class="form-label">Simulated Bin Fill Level (%)</label>
-            <span id="sim-level-val" style="font-weight: 700; color: var(--primary); font-size: 16px;">84%</span>
-          </div>
-          <input type="range" id="sim-fill-slider" min="0" max="100" value="84" oninput="document.getElementById('sim-level-val').innerText = this.value + '%'">
-          <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-            <span>0% (Empty)</span>
-            <span style="color: var(--danger); font-weight: 700;">82% Threshold Alert</span>
-            <span>100% (Full)</span>
-          </div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Assign Task & Send SMS</button>
+          <button type="button" class="btn btn-outline" onclick="document.getElementById('assign-task-modal').classList.remove('open')">Cancel</button>
         </div>
-
-        <button class="btn btn-primary" style="width: 100%;" onclick="app.sendSimulatedTelemetry()">
-          📡 Send ESP32 Telemetry (POST /api/telemetry)
-        </button>
-      </div>
-
-      <!-- ESP32 Arduino C++ Code Guide -->
-      <div class="card">
-        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">
-          💻 ESP32 C++ Arduino Integration Code
-        </h3>
-        <p style="font-size: 12px; color: var(--text-muted);">
-          Upload this sketch to your ESP32 board connected to an HC-SR04 ultrasonic sensor to post telemetry directly to this server:
-        </p>
-
-        <div class="code-block">
-#include &lt;WiFi.h&gt;
-#include &lt;HTTPClient.h&gt;
-#include &lt;ArduinoJson.h&gt;
-
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-const char* serverUrl = "http://YOUR_SERVER_IP:3000/api/telemetry";
-
-#define TRIG_PIN 5
-#define ECHO_PIN 18
-#define BIN_HEIGHT_CM 100.0
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); }
-}
-
-void loop() {
-  digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-  long duration = pulseIn(ECHO_PIN, HIGH);
-  float distanceCm = duration * 0.034 / 2;
-  
-  // Calculate Fill Percentage
-  int fillLevel = constrain(100 - (distanceCm / BIN_HEIGHT_CM * 100), 0, 100);
-
-  // Send telemetry HTTP POST
-  HTTPClient http;
-  http.begin(serverUrl);
-  http.addHeader("Content-Type", "application/json");
-  
-  String json;
-  StaticJsonDocument<200> doc;
-  doc["bin_id"] = "BIN-01";
-  doc["fill_level"] = fillLevel;
-  doc["battery"] = 92;
-  serializeJson(doc, json);
-
-  int httpCode = http.POST(json);
-  http.end();
-
-  delay(10000); // Poll every 10 seconds
-}
-        </div>
-      </div>
-    </main>
-
+      </form>
+    </div>
   </div>
 
-  <!-- Bottom Mobile Navigation Bar -->
-  <nav class="bottom-nav">
-    <div id="nav-dashboard" class="nav-item active" onclick="app.switchTab('dashboard')">
-      <span class="nav-icon">📊</span>
-      <span>Bins</span>
-    </div>
-    <div id="nav-superadmin" class="nav-item superadmin-tab" style="display: none;" onclick="app.switchTab('superadmin')">
-      <span class="nav-icon">👑</span>
-      <span>Superadmin</span>
-    </div>
-    <div id="nav-alerts" class="nav-item" onclick="app.switchTab('alerts')">
-      <span class="nav-icon">🚨</span>
-      <span>Alerts</span>
-    </div>
-    <div id="nav-simulator" class="nav-item" onclick="app.switchTab('simulator')">
-      <span class="nav-icon">⚡</span>
-      <span>ESP32 Sim</span>
-    </div>
-  </nav>
+  <!-- SUPERADMIN RESET PASSWORD MODAL (Story 13) -->
+  <div id="reset-password-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 12px;">Reset Admin Password</h3>
+      <form onsubmit="app.executePasswordReset(event)">
+        <input type="hidden" id="reset-target-user-id">
+        <div class="form-group">
+          <label class="form-label">Target Admin</label>
+          <input type="text" id="reset-target-username" class="form-input" readonly>
+        </div>
 
-  <!-- MODAL 1: AUTHENTICATION & LOGIN / REGISTRATION -->
+        <div class="form-group">
+          <label class="form-label">Set New Password</label>
+          <input type="password" id="reset-new-pass" class="form-input" placeholder="Min 6 characters" minlength="6" required>
+          <div class="form-hint">Password Criteria: Minimum 6 characters</div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Save Password</button>
+          <button type="button" class="btn btn-outline" onclick="document.getElementById('reset-password-modal').classList.remove('open')">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- AUTHENTICATION LOGIN MODAL (Story 3) -->
   <div id="auth-modal" class="modal-overlay open">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="auth-modal-title" class="modal-title">🔐 System Login</h2>
+    <div class="modal-card">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="font-size: 18px; font-weight: 800; color: var(--text-main); letter-spacing: 0.5px;">SMARTBIN PORTAL</h2>
+        <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Log in to access operator dashboard</p>
       </div>
 
-      <!-- Login Form -->
       <form id="form-login" onsubmit="app.handleLogin(event)">
         <div class="form-group">
-          <label class="form-label">Username</label>
-          <input type="text" id="login-username" class="form-input" placeholder="e.g. admin_john or superadmin" required>
+          <label class="form-label">Username or Email</label>
+          <input type="text" id="login-username" class="form-input" placeholder="e.g. superadmin or admin email" required>
         </div>
+
         <div class="form-group">
           <label class="form-label">Password</label>
           <input type="password" id="login-password" class="form-input" placeholder="Enter password" required>
@@ -308,97 +537,14 @@ void loop() {
           Log In
         </button>
 
-        <div style="margin-top: 14px; text-align: center; font-size: 12px; display: flex; justify-content: space-between;">
-          <a href="#" style="color: var(--primary);" onclick="app.showAuthTab('register')">Register New Admin</a>
-          <a href="#" style="color: var(--text-muted);" onclick="app.showAuthTab('forgot')">Forgot Password?</a>
-        </div>
-
-        <!-- Quick Demo Credentials Box -->
-        <div style="margin-top: 18px; padding: 10px; background: #0f172a; border-radius: 8px; border: 1px dashed var(--border-color); font-size: 11px; color: var(--text-muted);">
-          <div style="font-weight: 700; color: var(--text-main); margin-bottom: 4px;">💡 Demo Quick Logins:</div>
-          <div>👑 <b>Superadmin:</b> <code style="color: var(--superadmin-gold);">superadmin</code> / <code>admin123password</code></div>
-          <div>🛡️ <b>Admin:</b> <code style="color: var(--primary);">admin_john</code> / <code>password123</code></div>
-        </div>
-      </form>
-
-      <!-- Register Form -->
-      <form id="form-register" style="display: none;" onsubmit="app.handleRegister(event)">
-        <div class="form-group">
-          <label class="form-label">Full Name</label>
-          <input type="text" id="reg-name" class="form-input" placeholder="e.g. Sarah Smith" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Email Address</label>
-          <input type="email" id="reg-email" class="form-input" placeholder="e.g. sarah@smartbin.io" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Desired Username</label>
-          <input type="text" id="reg-username" class="form-input" placeholder="e.g. admin_sarah" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input type="password" id="reg-password" class="form-input" placeholder="Set password" required>
-        </div>
-
-        <button type="submit" class="btn btn-success" style="width: 100%; margin-top: 8px;">
-          Submit Admin Registration
-        </button>
-        <p style="font-size: 11px; color: var(--warning); margin-top: 8px; text-align: center;">
-          ⚠️ Your account will require Superadmin approval before login access is granted.
-        </p>
-
-        <div style="margin-top: 14px; text-align: center; font-size: 12px;">
-          <a href="#" style="color: var(--text-muted);" onclick="app.showAuthTab('login')">← Back to Login</a>
-        </div>
-      </form>
-
-      <!-- Forgot Password Form -->
-      <form id="form-forgot" style="display: none;" onsubmit="app.handleForgotPassword(event)">
-        <div class="form-group">
-          <label class="form-label">Your Admin Username</label>
-          <input type="text" id="forgot-username" class="form-input" placeholder="e.g. admin_john" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Reason / Notes for Superadmin</label>
-          <textarea id="forgot-reason" class="form-input" rows="3" placeholder="Briefly state reason for password reset request..."></textarea>
-        </div>
-
-        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
-          Send Reset Request to Superadmin
-        </button>
-
-        <div style="margin-top: 14px; text-align: center; font-size: 12px;">
-          <a href="#" style="color: var(--text-muted);" onclick="app.showAuthTab('login')">← Back to Login</a>
+        <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 11px; color: var(--text-muted);">
+          <div style="font-weight: 700; color: var(--text-main); margin-bottom: 4px;">Default System Login:</div>
+          <div>Superadmin: <code style="color: var(--superadmin-gold);">superadmin</code> / <code>admin123password</code></div>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL 2: SUPERADMIN PASSWORD RESET ACTION MODAL -->
-  <div id="reset-modal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 class="modal-title">🔑 Superadmin Password Reset</h2>
-        <button class="btn-icon-logout" onclick="document.getElementById('reset-modal').classList.remove('open')">✕</button>
-      </div>
-      <form onsubmit="app.executeSuperadminReset(event)">
-        <input type="hidden" id="reset-ticket-id">
-        <div class="form-group">
-          <label class="form-label">Target Admin Username</label>
-          <input type="text" id="reset-target-user" class="form-input" readonly>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Set New Password for Admin</label>
-          <input type="text" id="reset-new-password" class="form-input" placeholder="e.g. newSecurePass123" required>
-        </div>
-        <button type="submit" class="btn btn-primary" style="width: 100%;">
-          Authorize & Update Password
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- Application Frontend Logic -->
   <script src="app.js"></script>
 </body>
 </html>

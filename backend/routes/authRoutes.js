@@ -4,8 +4,10 @@ const {
   registerAdmin,
   login,
   getAdmins,
-  approveAdmin,
-  rejectAdmin,
+  resetAdminPassword,
+  toggleSuspendAdmin,
+  deleteAdmin,
+  getAuditLogs,
   requestPasswordRecovery,
   getPasswordResetRequests,
   processPasswordReset
@@ -15,12 +17,14 @@ router.post('/register', registerAdmin);
 router.post('/register-admin', registerAdmin);
 router.post('/login', login);
 
-// Superadmin Admin Management Routes
+// Admin Governance & Audit Log Endpoints (Superadmin)
 router.get('/admins', getAdmins);
-router.post('/admins/:userId/approve', approveAdmin);
-router.post('/admins/:userId/reject', rejectAdmin);
+router.post('/admins/:userId/reset-password', resetAdminPassword);
+router.post('/admins/:userId/suspend', toggleSuspendAdmin);
+router.delete('/admins/:userId', deleteAdmin);
+router.get('/audit-logs', getAuditLogs);
 
-// Password Recovery Routes
+// Legacy password reset ticket endpoints
 router.post('/forgot-password', requestPasswordRecovery);
 router.get('/password-requests', getPasswordResetRequests);
 router.post('/reset-password', processPasswordReset);
