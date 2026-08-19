@@ -9,7 +9,7 @@ const taskSchema = new mongoose.Schema(
     location: { type: String, required: true },
     compartment: { type: String, enum: ['dry', 'wet', 'metal'], required: true },
     status: { type: String, enum: ['ASSIGNED', 'COMPLETED'], default: 'ASSIGNED' },
-    smsStatus: { type: String, enum: ['SENT', 'FAILED', 'MOCK_DISPATCH'], default: 'MOCK_DISPATCH' },
+    smsStatus: { type: String, enum: ['SENT', 'FAILED', 'SIMULATED', 'ASSIGNED', 'MOCK_DISPATCH'], default: 'SENT' },
     assignedAt: { type: Date, default: Date.now }
   },
   { timestamps: true }
