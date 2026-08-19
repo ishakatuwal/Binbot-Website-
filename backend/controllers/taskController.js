@@ -8,6 +8,7 @@ const Staff = require('../models/Staff');
 const Alert = require('../models/Alert');
 const Bin = require('../models/Bin');
 const AuditLog = require('../models/AuditLog');
+const { sendTaskSMS } = require('../utils/sendSMS');
 
 // Assign Task to Staff Member (Story 20, 21)
 exports.assignTask = async (req, res) => {
@@ -28,6 +29,12 @@ exports.assignTask = async (req, res) => {
     const location = bin ? bin.location : 'Field Location';
     const compName = compartment.toUpperCase();
 
+    // Construct SMS Text Message
+    const smsMessageBody = `🚨 BINBOT URGENT TASK ASSIGNED: Hello ${staff.fullName}, you have been assigned to collect Bin ID: ${formattedBinId} (${compName} Compartment - 100% FULL) at Location: ${location}. Phone: ${staff.phone}. Please clear upon arrival.`;
+
+    // Dispatch Twilio SMS Message
+    const smsResult = await sendTaskSMS(staff.phone, smsMessageBody);
+
     // 1. Create Task document in MongoDB
     const newTask = await Task.create({
       staffId: staff._id,
@@ -37,7 +44,7 @@ exports.assignTask = async (req, res) => {
       location,
       compartment: compartment.toLowerCase(),
       status: 'ASSIGNED',
-      smsStatus: 'ASSIGNED'
+      smsStatus: smsResult.success ? (smsResult.mode === 'REAL_SMS' ? 'SENT' : 'SIMULATED') : 'FAILED'
     });
 
     // 2. Update Alert status to "ASSIGNED: [Staff Name]" (Story 20, 21)
