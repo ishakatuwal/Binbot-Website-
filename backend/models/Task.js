@@ -42,8 +42,8 @@ const taskSchema = new mongoose.Schema(
     },
     smsStatus: {
       type: String,
-      enum: ['SENT', 'FAILED', 'MOCK_DISPATCH'],
-      default: 'MOCK_DISPATCH'
+      enum: ['SENT', 'FAILED', 'SIMULATED', 'ASSIGNED', 'MOCK_DISPATCH'],
+      default: 'SENT'
     },
     assignedAt: {
       type: Date,
