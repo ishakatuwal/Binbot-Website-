@@ -32,12 +32,12 @@ exports.assignTask = async (req, res) => {
     // Construct SMS Text Message
     const smsMessageBody = `🚨 BINBOT URGENT TASK ASSIGNED: Hello ${staff.fullName}, you have been assigned to collect Bin ID: ${formattedBinId} (${compName} Compartment - 100% FULL) at Location: ${location}. Phone: ${staff.phone}. Please clear upon arrival.`;
 
-    // Dispatch Twilio SMS Message (Gracefully handle API errors)
+    // Dispatch AWS SNS SMS Message (Gracefully handle API errors)
     let smsResult = { success: false, mode: 'SIMULATED' };
     try {
       smsResult = await sendTaskSMS(staff.phone, smsMessageBody);
     } catch (smsErr) {
-      console.warn('⚠️ Twilio SMS Dispatch Warning:', smsErr.message);
+      console.warn('⚠️ AWS SNS SMS Dispatch Warning:', smsErr.message);
     }
 
     // 1. Create Task document in MongoDB
@@ -86,7 +86,7 @@ exports.assignTask = async (req, res) => {
     });
 
     const successNotice = smsResult.success && smsResult.mode === 'REAL_SMS'
-      ? `Task assigned to ${staff.fullName}! Real Twilio SMS sent to ${staff.phone}.`
+      ? `Task assigned to ${staff.fullName}! Real AWS SNS SMS sent to ${staff.phone}.`
       : `Task assigned to ${staff.fullName}! (SMS notification recorded).`;
 
     res.status(201).json({
