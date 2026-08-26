@@ -1,10 +1,10 @@
 /**
  * backend/utils/sendSMS.js
- * Twilio SMS Gateway Messaging Service
- * Formats Australian/Global mobile numbers and dispatches real SMS messages via Twilio REST API.
+ * AWS Simple Notification Service (AWS SNS) SMS Gateway
+ * Formats Australian/Global mobile numbers and dispatches SMS messages via AWS SNS API.
  */
 
-const twilio = require('twilio');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 
 /**
  * Formats mobile phone numbers to E.164 international standard (+61 for Australia)
@@ -13,55 +13,79 @@ const twilio = require('twilio');
  */
 function formatE164Phone(phone) {
   if (!phone) return '';
-  let cleaned = phone.replace(/\D/g, ''); // strip non-digits
+  let cleaned = phone.toString().replace(/\D/g, ''); // strip non-digits
   if (cleaned.startsWith('0') && cleaned.length === 10) {
     return '+61' + cleaned.substring(1); // Convert 0414972400 -> +61414972400
   }
-  if (!phone.startsWith('+')) {
+  if (!phone.toString().startsWith('+')) {
     return '+' + cleaned;
   }
-  return phone;
+  return phone.toString();
 }
 
 /**
- * Dispatch real SMS text message via Twilio API
+ * Creates and returns an AWS SNS Client instance if credentials are valid.
+ * @returns {SNSClient|null}
+ */
+function getSNSClient() {
+  const region = process.env.AWS_REGION || 'ap-southeast-2';
+  const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || '').trim();
+  const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || '').trim();
+
+  if (!accessKeyId || !secretAccessKey || accessKeyId.includes('YOUR_') || secretAccessKey.includes('YOUR_')) {
+    return null;
+  }
+
+  return new SNSClient({
+    region,
+    credentials: {
+      accessKeyId,
+      secretAccessKey
+    }
+  });
+}
+
+/**
+ * Dispatch real SMS text message via AWS Simple Notification Service (SNS)
  * @param {string} toPhone Staff mobile number
  * @param {string} messageText Body of SMS message
- * @returns {Promise<{success: boolean, sid?: string, mode: string, error?: string}>}
+ * @returns {Promise<{success: boolean, messageId?: string, mode: string, error?: string}>}
  */
 async function sendTaskSMS(toPhone, messageText) {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromPhone = process.env.TWILIO_PHONE_NUMBER;
-
   const formattedTo = formatE164Phone(toPhone);
+  const client = getSNSClient();
 
-  // Check if Twilio API credentials are present in environment variables
-  if (!accountSid || !authToken || !fromPhone || accountSid.includes('YOUR_') || authToken.includes('YOUR_')) {
-    console.log(`📱 [TWILIO SMS SIMULATION] To: ${formattedTo} | Message: ${messageText}`);
+  // If AWS credentials are not configured, fallback to simulation mode
+  if (!client) {
+    console.log(`📱 [AWS SNS SIMULATION] To: ${formattedTo} | Message: ${messageText}`);
     return {
       success: true,
       mode: 'SIMULATED',
-      message: 'Twilio credentials not configured in .env. Message logged to server console.'
+      message: 'AWS SNS credentials not configured in environment. Notification logged in simulation mode.'
     };
   }
 
   try {
-    const client = twilio(accountSid, authToken);
-    const result = await client.messages.create({
-      body: messageText,
-      from: fromPhone,
-      to: formattedTo
+    const command = new PublishCommand({
+      PhoneNumber: formattedTo,
+      Message: messageText,
+      MessageAttributes: {
+        'AWS.SNS.SMS.SMSType': {
+          DataType: 'String',
+          StringValue: 'Transactional' // High-priority transactional SMS delivery
+        }
+      }
     });
 
-    console.log(`✅ [TWILIO REAL SMS SENT] SID: ${result.sid} | Sent to: ${formattedTo}`);
+    const response = await client.send(command);
+    console.log(`✅ [AWS SNS REAL SMS SENT] MessageId: ${response.MessageId} | Sent to: ${formattedTo}`);
     return {
       success: true,
       mode: 'REAL_SMS',
-      sid: result.sid
+      messageId: response.MessageId
     };
   } catch (error) {
-    console.error(`❌ [TWILIO SMS ERROR] Failed to send SMS to ${formattedTo}:`, error.message);
+    console.error(`❌ [AWS SNS ERROR] Failed to send SMS to ${formattedTo}:`, error.message);
     return {
       success: false,
       mode: 'FAILED',
