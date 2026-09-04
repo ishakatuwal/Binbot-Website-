@@ -32,10 +32,18 @@ const alertSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['UNRESOLVED', 'ACKNOWLEDGED', 'RESOLVED', 'ASSIGNED'],
+      enum: ['UNRESOLVED', 'ACKNOWLEDGED', 'RESOLVED', 'ASSIGNED', 'COMPLETED'],
       default: 'UNRESOLVED'
     },
     acknowledgedBy: {
+      type: String,
+      default: null
+    },
+    completedAt: {
+      type: Date,
+      default: null
+    },
+    completedBy: {
       type: String,
       default: null
     },
