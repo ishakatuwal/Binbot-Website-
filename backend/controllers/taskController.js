@@ -111,11 +111,12 @@ exports.getTasks = async (req, res) => {
   }
 };
 
-// Complete Task & Dismiss Alert (Story 7, 20, 21)
+// Complete Task & Dismiss Alert (Story: Completed Button on Assigned Alerts)
 exports.completeTask = async (req, res) => {
   try {
-    const { taskId, alertId, binId, compartment } = req.body;
+    const { taskId, alertId, binId, compartment, completedBy, adminName } = req.body;
     const targetTaskId = taskId || req.params.taskId;
+    const adminUser = completedBy || adminName || 'Admin';
 
     let task = null;
     if (targetTaskId) {
@@ -140,6 +141,7 @@ exports.completeTask = async (req, res) => {
     if (task) {
       task.status = 'COMPLETED';
       task.completedAt = completedTime;
+      task.completedBy = adminUser;
       await task.save();
 
       // Free up the assigned staff member back to AVAILABLE
@@ -151,20 +153,21 @@ exports.completeTask = async (req, res) => {
     const targetBinId = task ? task.binId : (binId ? binId.trim().toUpperCase() : null);
     const targetComp = task ? task.compartment : (compartment ? compartment.toLowerCase() : null);
 
-    // 2. Dismiss and resolve alert in MongoDB
+    // 2. Update Alert status to COMPLETED with timestamp and admin who completed it
     if (alertId) {
       await Alert.findByIdAndUpdate(alertId, {
-        status: 'RESOLVED',
+        status: 'COMPLETED',
         isAssigned: false,
-        resolvedAt: completedTime
+        completedAt: completedTime,
+        completedBy: adminUser
       });
     }
 
     if (targetBinId) {
-      // Resolve any remaining active alerts for this bin
+      // Mark assigned alerts for this bin as COMPLETED
       await Alert.updateMany(
-        { binId: targetBinId, status: { $ne: 'RESOLVED' } },
-        { $set: { status: 'RESOLVED', isAssigned: false, resolvedAt: completedTime } }
+        { binId: targetBinId, status: { $in: ['ASSIGNED', 'UNRESOLVED', 'ACKNOWLEDGED'] } },
+        { $set: { status: 'COMPLETED', isAssigned: false, completedAt: completedTime, completedBy: adminUser } }
       );
 
       // 3. Clear the Bin compartment fill level back to 0%
@@ -184,16 +187,18 @@ exports.completeTask = async (req, res) => {
 
     // 4. Record in Immutable Audit Log
     await AuditLog.create({
-      action: 'COMPLETE_TASK',
-      performedBy: 'operator',
+      action: 'COMPLETE_ALERT_TASK',
+      performedBy: adminUser,
       targetItem: targetBinId || 'TASK',
-      details: `Completed collection task for ${targetBinId || 'Bin'} (${(targetComp || 'all').toUpperCase()} compartment). Alert dismissed from active display and fill level reset to 0%.`
+      details: `Admin (${adminUser}) marked alert & collection task for ${targetBinId || 'Bin'} (${(targetComp || 'all').toUpperCase()} compartment) as COMPLETED on ${completedTime.toLocaleString()}. Alert dismissed from active view.`
     });
 
     res.json({
       success: true,
-      message: `Task completed! Bin ${targetBinId || ''} cleared and alert dismissed.`,
-      task
+      message: `Alert marked as COMPLETED! Bin ${targetBinId || ''} cleared and archived.`,
+      task,
+      completedAt: completedTime,
+      completedBy: adminUser
     });
   } catch (error) {
     console.error('Error completing task:', error);
