@@ -110,3 +110,94 @@ exports.getTasks = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Complete Task & Dismiss Alert (Story 7, 20, 21)
+exports.completeTask = async (req, res) => {
+  try {
+    const { taskId, alertId, binId, compartment } = req.body;
+    const targetTaskId = taskId || req.params.taskId;
+
+    let task = null;
+    if (targetTaskId) {
+      task = await Task.findById(targetTaskId);
+    }
+    if (!task && alertId) {
+      const alt = await Alert.findById(alertId);
+      if (alt && alt.taskId) {
+        task = await Task.findById(alt.taskId);
+      }
+    }
+    if (!task && binId) {
+      task = await Task.findOne({
+        binId: binId.trim().toUpperCase(),
+        status: 'ASSIGNED'
+      }).sort({ createdAt: -1 });
+    }
+
+    const completedTime = new Date();
+
+    // 1. Update Task document status to COMPLETED
+    if (task) {
+      task.status = 'COMPLETED';
+      task.completedAt = completedTime;
+      await task.save();
+
+      // Free up the assigned staff member back to AVAILABLE
+      if (task.staffId) {
+        await Staff.findByIdAndUpdate(task.staffId, { status: 'AVAILABLE' });
+      }
+    }
+
+    const targetBinId = task ? task.binId : (binId ? binId.trim().toUpperCase() : null);
+    const targetComp = task ? task.compartment : (compartment ? compartment.toLowerCase() : null);
+
+    // 2. Dismiss and resolve alert in MongoDB
+    if (alertId) {
+      await Alert.findByIdAndUpdate(alertId, {
+        status: 'RESOLVED',
+        isAssigned: false,
+        resolvedAt: completedTime
+      });
+    }
+
+    if (targetBinId) {
+      // Resolve any remaining active alerts for this bin
+      await Alert.updateMany(
+        { binId: targetBinId, status: { $ne: 'RESOLVED' } },
+        { $set: { status: 'RESOLVED', isAssigned: false, resolvedAt: completedTime } }
+      );
+
+      // 3. Clear the Bin compartment fill level back to 0%
+      const bin = await Bin.findOne({ binId: targetBinId });
+      if (bin) {
+        if (targetComp && bin.compartments && bin.compartments[targetComp] !== undefined) {
+          bin.compartments[targetComp] = 0;
+        } else if (bin.compartments) {
+          bin.compartments.dry = 0;
+          bin.compartments.wet = 0;
+          bin.compartments.metal = 0;
+        }
+        bin.lastUpdated = completedTime;
+        await bin.save();
+      }
+    }
+
+    // 4. Record in Immutable Audit Log
+    await AuditLog.create({
+      action: 'COMPLETE_TASK',
+      performedBy: 'operator',
+      targetItem: targetBinId || 'TASK',
+      details: `Completed collection task for ${targetBinId || 'Bin'} (${(targetComp || 'all').toUpperCase()} compartment). Alert dismissed from active display and fill level reset to 0%.`
+    });
+
+    res.json({
+      success: true,
+      message: `Task completed! Bin ${targetBinId || ''} cleared and alert dismissed.`,
+      task
+    });
+  } catch (error) {
+    console.error('Error completing task:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
