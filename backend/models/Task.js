@@ -48,6 +48,9 @@ const taskSchema = new mongoose.Schema(
     assignedAt: {
       type: Date,
       default: Date.now
+    },
+    completedAt: {
+      type: Date
     }
   },
   {
