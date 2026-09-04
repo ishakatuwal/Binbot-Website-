@@ -873,6 +873,23 @@ const app = {
     }
   },
 
+  alertFilter: 'active', // 'active' | 'completed' | 'all'
+
+  setAlertFilter(filter) {
+    this.alertFilter = filter;
+    
+    // Update button visual styles
+    const btnActive = document.getElementById('alert-filter-active');
+    const btnCompleted = document.getElementById('alert-filter-completed');
+    const btnAll = document.getElementById('alert-filter-all');
+    
+    if (btnActive) btnActive.className = filter === 'active' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
+    if (btnCompleted) btnCompleted.className = filter === 'completed' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
+    if (btnAll) btnAll.className = filter === 'all' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
+    
+    this.renderAlertsTable();
+  },
+
   async fetchAlerts() {
     try {
       const res = await fetch('/api/alerts');
@@ -889,60 +906,117 @@ const app = {
     const tbody = document.getElementById('alerts-table-body');
     if (!tbody) return;
 
-    // Filter active alerts (dismiss completed/resolved alerts from active display)
-    const activeAlerts = (this.alerts || []).filter(alt => alt.status !== 'RESOLVED' && alt.status !== 'COMPLETED');
+    if (!this.alerts) this.alerts = [];
 
-    if (activeAlerts.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">✅ No active alerts. All collection tasks are completed and cleared.</td></tr>`;
+    // Calculate Counts for Filter Badges
+    const activeAlerts = this.alerts.filter(alt => alt.status !== 'RESOLVED' && alt.status !== 'COMPLETED');
+    const completedAlerts = this.alerts.filter(alt => alt.status === 'RESOLVED' || alt.status === 'COMPLETED');
+    const allAlerts = this.alerts;
+
+    const countActiveEl = document.getElementById('count-active-alerts');
+    const countCompletedEl = document.getElementById('count-completed-alerts');
+    const countAllEl = document.getElementById('count-all-alerts');
+
+    if (countActiveEl) countActiveEl.innerText = activeAlerts.length;
+    if (countCompletedEl) countCompletedEl.innerText = completedAlerts.length;
+    if (countAllEl) countAllEl.innerText = allAlerts.length;
+
+    // Filter list according to current tab selection (Acceptance Criteria 7 & 8)
+    let displayList = activeAlerts;
+    if (this.alertFilter === 'completed') {
+      displayList = completedAlerts;
+    } else if (this.alertFilter === 'all') {
+      displayList = allAlerts;
+    }
+
+    if (displayList.length === 0) {
+      const msg = this.alertFilter === 'completed'
+        ? 'No completed alerts found in history.'
+        : (this.alertFilter === 'active'
+            ? '✅ No active alerts. All collection tasks are completed and cleared.'
+            : 'No alerts recorded in database.');
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">${msg}</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = activeAlerts.map(alt => `
-      <tr>
-        <td>${new Date(alt.createdAt).toLocaleString()}</td>
-        <td><code>${alt.binId}</code></td>
-        <td>${alt.location}</td>
-        <td><strong style="text-transform: uppercase;">${alt.compartment}</strong></td>
-        <td><span style="color: var(--danger); font-weight: 700;">${alt.fillLevel}%</span></td>
-        <td>
-          ${alt.isAssigned
-            ? `<span class="user-role-badge" style="background: var(--primary-light); color: var(--primary);">ASSIGNED: ${alt.assignedStaffName}</span>`
-            : (alt.status === 'ACKNOWLEDGED'
-                ? `<span class="user-role-badge" style="background: var(--warning-bg); color: var(--warning);">ACKNOWLEDGED</span>`
-                : `<span class="user-role-badge" style="background: var(--danger-bg); color: var(--danger);">UNRESOLVED</span>`)
-          }
-        </td>
-        <td>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            ${!alt.isAssigned 
-              ? `<button class="btn btn-sm btn-primary" onclick="app.openAssignTaskModal('${alt.binId}', '${alt.compartment}', '${alt._id}')">Assign Task</button>`
-              : `
-                <button class="btn btn-sm btn-outline" style="background: #f1f5f9; color: #475569; border-color: #cbd5e1; cursor: default;" disabled>Assigned</button>
-                <button class="btn btn-sm" style="background: #10b981; color: #ffffff; border: none; font-weight: 700; border-radius: 6px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="app.completeTask('${alt._id}', '${alt.taskId || ''}', '${alt.binId}', '${alt.compartment}')">✓ Complete</button>
-              `
-            }
-            ${alt.status === 'UNRESOLVED' && !alt.isAssigned
-              ? `<button class="btn btn-sm btn-outline" onclick="app.acknowledgeAlert('${alt._id}')">Acknowledge</button>`
-              : ''
-            }
+    tbody.innerHTML = displayList.map(alt => {
+      const isCompleted = alt.status === 'COMPLETED' || alt.status === 'RESOLVED';
+      const isAssigned = alt.isAssigned || alt.status === 'ASSIGNED';
+
+      let statusBadge = '';
+      if (isCompleted) {
+        statusBadge = `
+          <div>
+            <span class="user-role-badge" style="background: #dcfce7; color: #15803d; border: 1px solid #86efac; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+              ✓ COMPLETED
+            </span>
+            ${alt.completedAt ? `<div style="font-size: 10px; color: #64748b; margin-top: 3px;">By: ${alt.completedBy || 'Admin'}<br>${new Date(alt.completedAt).toLocaleString()}</div>` : ''}
           </div>
-        </td>
-      </tr>
-    `).join('');
+        `;
+      } else if (isAssigned) {
+        statusBadge = `<span class="user-role-badge" style="background: var(--primary-light); color: var(--primary); font-weight: 600;">ASSIGNED: ${alt.assignedStaffName || 'Staff'}</span>`;
+      } else if (alt.status === 'ACKNOWLEDGED') {
+        statusBadge = `<span class="user-role-badge" style="background: var(--warning-bg); color: var(--warning);">ACKNOWLEDGED</span>`;
+      } else {
+        statusBadge = `<span class="user-role-badge" style="background: var(--danger-bg); color: var(--danger); font-weight: 700;">UNRESOLVED</span>`;
+      }
+
+      let actionButtons = '';
+      if (isCompleted) {
+        actionButtons = `<span style="font-size: 11px; color: #059669; font-weight: 700;">✓ Archived</span>`;
+      } else if (isAssigned) {
+        actionButtons = `
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn btn-sm btn-outline" style="background: #f1f5f9; color: #475569; border-color: #cbd5e1; cursor: default;" disabled>Assigned</button>
+            <button class="btn btn-sm" style="background: #10b981; color: #ffffff; border: none; font-weight: 700; border-radius: 6px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="app.confirmCompleteAlert('${alt._id}', '${alt.taskId || ''}', '${alt.binId}', '${alt.compartment}')">
+              ✓ Completed
+            </button>
+          </div>
+        `;
+      } else {
+        actionButtons = `
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn btn-sm btn-primary" onclick="app.openAssignTaskModal('${alt.binId}', '${alt.compartment}', '${alt._id}')">Assign Task</button>
+            ${alt.status === 'UNRESOLVED' ? `<button class="btn btn-sm btn-outline" onclick="app.acknowledgeAlert('${alt._id}')">Acknowledge</button>` : ''}
+          </div>
+        `;
+      }
+
+      return `
+        <tr style="${isCompleted ? 'background: rgba(240, 253, 244, 0.4);' : ''}">
+          <td>${new Date(alt.createdAt).toLocaleString()}</td>
+          <td><code>${alt.binId}</code></td>
+          <td>${alt.location}</td>
+          <td><strong style="text-transform: uppercase;">${alt.compartment}</strong></td>
+          <td><span style="color: ${isCompleted ? '#059669' : 'var(--danger)'}; font-weight: 700;">${isCompleted ? '0% (Cleared)' : alt.fillLevel + '%'}</span></td>
+          <td>${statusBadge}</td>
+          <td>${actionButtons}</td>
+        </tr>
+      `;
+    }).join('');
   },
 
-  // Complete Task and Dismiss Alert (Story 7, 20, 21)
-  async completeTask(alertId, taskId, binId, compartment) {
+  // Confirmation dialog before completing (Acceptance Criteria 5)
+  confirmCompleteAlert(alertId, taskId, binId, compartment) {
+    const binLabel = `Bin ${binId} (${(compartment || 'Waste').toUpperCase()} compartment)`;
+    this.showConfirmModal(`Are you sure you want to mark this alert for ${binLabel} as completed?`, async () => {
+      await this.executeCompleteTask({ alertId, taskId, binId, compartment });
+    });
+  },
+
+  // Execute Task and Alert Completion (Acceptance Criteria 3, 4, 9)
+  async executeCompleteTask({ alertId, taskId, binId, compartment }) {
     try {
+      const adminName = this.currentUser ? (this.currentUser.fullName || this.currentUser.username) : 'Admin';
       const res = await fetch('/api/tasks/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alertId, taskId, binId, compartment })
+        body: JSON.stringify({ alertId, taskId, binId, compartment, completedBy: adminName, adminName })
       });
 
       const data = await res.json();
       if (res.ok) {
-        this.showToast(data.message || 'Task marked as COMPLETED! Bin cleared and alert dismissed.', 'success');
+        this.showToast(data.message || 'Alert and task marked as COMPLETED!', 'success');
         this.fetchAlerts();
         this.fetchBins();
         this.fetchStaff();

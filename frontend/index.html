@@ -166,7 +166,24 @@
         <section id="view-alerts" class="view-panel">
           <div class="page-title-row">
             <h1 class="page-title">Hardware Overflow Alerts & Task Assignments</h1>
-            <button class="btn btn-sm btn-outline" onclick="app.fetchAlerts()">Refresh Log</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="btn btn-sm btn-outline" onclick="app.downloadPdfReport()">📄 Download PDF</button>
+              <button class="btn btn-sm btn-outline" onclick="app.fetchAlerts()">Refresh Log</button>
+            </div>
+          </div>
+
+          <!-- Alert Status Filter Tabs (Acceptance Criteria: View Completed Separately) -->
+          <div style="display: flex; gap: 8px; margin-bottom: 14px; align-items: center; flex-wrap: wrap;">
+            <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-right: 4px;">Filter:</span>
+            <button id="alert-filter-active" class="btn btn-sm btn-primary" onclick="app.setAlertFilter('active')">
+              Active Alerts (<span id="count-active-alerts">0</span>)
+            </button>
+            <button id="alert-filter-completed" class="btn btn-sm btn-outline" onclick="app.setAlertFilter('completed')">
+              Completed Alerts (<span id="count-completed-alerts">0</span>)
+            </button>
+            <button id="alert-filter-all" class="btn btn-sm btn-outline" onclick="app.setAlertFilter('all')">
+              All Alerts (<span id="count-all-alerts">0</span>)
+            </button>
           </div>
 
           <div class="card">
