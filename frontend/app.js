@@ -889,12 +889,15 @@ const app = {
     const tbody = document.getElementById('alerts-table-body');
     if (!tbody) return;
 
-    if (!this.alerts || this.alerts.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No 80%+ threshold alerts recorded.</td></tr>`;
+    // Filter active alerts (dismiss completed/resolved alerts from active display)
+    const activeAlerts = (this.alerts || []).filter(alt => alt.status !== 'RESOLVED' && alt.status !== 'COMPLETED');
+
+    if (activeAlerts.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">✅ No active alerts. All collection tasks are completed and cleared.</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = this.alerts.map(alt => `
+    tbody.innerHTML = activeAlerts.map(alt => `
       <tr>
         <td>${new Date(alt.createdAt).toLocaleString()}</td>
         <td><code>${alt.binId}</code></td>
@@ -910,10 +913,13 @@ const app = {
           }
         </td>
         <td>
-          <div style="display: flex; gap: 6px;">
+          <div style="display: flex; gap: 6px; align-items: center;">
             ${!alt.isAssigned 
               ? `<button class="btn btn-sm btn-primary" onclick="app.openAssignTaskModal('${alt.binId}', '${alt.compartment}', '${alt._id}')">Assign Task</button>`
-              : `<button class="btn btn-sm btn-outline" disabled>Assigned</button>`
+              : `
+                <button class="btn btn-sm btn-outline" style="background: #f1f5f9; color: #475569; border-color: #cbd5e1; cursor: default;" disabled>Assigned</button>
+                <button class="btn btn-sm" style="background: #10b981; color: #ffffff; border: none; font-weight: 700; border-radius: 6px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="app.completeTask('${alt._id}', '${alt.taskId || ''}', '${alt.binId}', '${alt.compartment}')">✓ Complete</button>
+              `
             }
             ${alt.status === 'UNRESOLVED' && !alt.isAssigned
               ? `<button class="btn btn-sm btn-outline" onclick="app.acknowledgeAlert('${alt._id}')">Acknowledge</button>`
@@ -923,6 +929,30 @@ const app = {
         </td>
       </tr>
     `).join('');
+  },
+
+  // Complete Task and Dismiss Alert (Story 7, 20, 21)
+  async completeTask(alertId, taskId, binId, compartment) {
+    try {
+      const res = await fetch('/api/tasks/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alertId, taskId, binId, compartment })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        this.showToast(data.message || 'Task marked as COMPLETED! Bin cleared and alert dismissed.', 'success');
+        this.fetchAlerts();
+        this.fetchBins();
+        this.fetchStaff();
+        if (this.activeTab === 'map') this.renderGoogleMap();
+      } else {
+        this.showToast(data.error || 'Failed to complete task', 'error');
+      }
+    } catch (err) {
+      this.showToast('Error connecting to server', 'error');
+    }
   },
 
   async acknowledgeAlert(alertId) {
